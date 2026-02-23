@@ -61,7 +61,7 @@ def validate_symbols(profile_dir: Path) -> list[str]:
             with open(sym_file) as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
-                    if not line or line.startswith("#"):
+                    if not line or line.startswith("#") or line.startswith(";"):
                         continue
 
                     # Strip comments for parsing
