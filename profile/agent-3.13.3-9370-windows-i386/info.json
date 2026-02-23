@@ -1,0 +1,12 @@
+{
+  "os": "windows",
+  "arch": "i386",
+  "module_name": "Agent.exe",
+  "module_base": "400000",
+  "function_count": 7773,
+  "version": "3.13.3",
+  "build": 9370,
+  "product": "bna",
+  "source_path": "~/Downloads/bna/Agent.9370/Agent.exe",
+  "notes": "Battle.net Agent (TACT 3.13.3, CASC 1.5.9). 32-bit PE, MSVC compiled."
+}

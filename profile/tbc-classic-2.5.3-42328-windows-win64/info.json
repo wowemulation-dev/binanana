@@ -1,0 +1,12 @@
+{
+  "os": "windows",
+  "arch": "amd64",
+  "module_name": "WowClassic.exe",
+  "module_base": "140000000",
+  "function_count": 0,
+  "version": "2.5.3",
+  "build": 42328,
+  "product": "wow_classic_tbc",
+  "source_path": "~/Downloads/wow_classic/2.5.3.42328.windows-win64/_classic_/WowClassic.exe",
+  "notes": "TBC Classic (Burning Crusade Classic)."
+}

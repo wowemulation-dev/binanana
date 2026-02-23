@@ -1,0 +1,12 @@
+{
+  "os": "windows",
+  "arch": "amd64",
+  "module_name": "WowClassic.exe",
+  "module_base": "140000000",
+  "function_count": 0,
+  "version": "1.15.2",
+  "build": 55140,
+  "product": "wow_classic_era",
+  "source_path": "~/Downloads/wow_classic/1.15.2.55140.windows-win64/_classic_era_/WowClassic.exe",
+  "notes": "Classic Era Season of Discovery."
+}

@@ -1,0 +1,13 @@
+{
+  "os": "windows",
+  "arch": "amd64",
+  "module_name": "WowClassic.exe",
+  "module_base": "140000000",
+  "function_count": 474,
+  "version": "1.14.0",
+  "build": 40618,
+  "product": "wow_classic_era",
+  "build_path": "D:\\BuildServer\\WoW\\3\\work\\DedicatedCheckout\\",
+  "source_path": "~/Downloads/wow_classic/1.14.0.40618.windows-win64/_classic_era_/WowClassic.exe",
+  "notes": "First Classic Era release. DX11+DX12, SDL, AV1 video, AGS, telemetry SDK 3.4.10."
+}

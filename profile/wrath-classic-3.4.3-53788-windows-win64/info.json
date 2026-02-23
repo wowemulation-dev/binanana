@@ -1,0 +1,12 @@
+{
+  "os": "windows",
+  "arch": "amd64",
+  "module_name": "WowClassic.exe",
+  "module_base": "140000000",
+  "function_count": 0,
+  "version": "3.4.3",
+  "build": 53788,
+  "product": "wow_classic_wrath",
+  "source_path": "~/Downloads/wow_classic/3.4.3.53788.windows-win64/_classic_/WowClassic.exe",
+  "notes": "Wrath Classic (Wrath of the Lich King Classic)."
+}

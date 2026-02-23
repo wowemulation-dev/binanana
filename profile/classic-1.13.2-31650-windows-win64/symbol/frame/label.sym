@@ -1,0 +1,7 @@
+; Lua script method registration tables
+; Format: 16-byte entries {string_ptr, func_ptr} terminated by sentinel
+CSimpleFontString_ScriptMethodTable 0000000141f6b230 l ; 24 entries
+CSimpleFrame_ScriptMethodTable 0000000141f5ead0 l ; 103 entries
+CScriptObject_ScriptMethodTable 0000000141f6c060 l ; 7 entries (base methods for Frame)
+NamePlate_ScriptFunctionTable 0000000142185e00 l ; 23 entries (global functions)
+CSimpleTexture_ScriptMethodTable 0000000141f6b3d0 l ; 201 entries (includes inherited methods)

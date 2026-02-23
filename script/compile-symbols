@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# Merge all category symbol files into one sorted main.sym file.
+# Usage: ./script/compile-symbols <profile-dir>
+
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <profile-dir>"
+    echo "Example: $0 profile/classic-1.13.2-31650-windows-win64"
+    exit 1
+fi
+
+profile_dir="$1"
+symbol_dir="$profile_dir/symbol"
+output="$symbol_dir/main.sym"
+
+if [ ! -d "$symbol_dir" ]; then
+    echo "Error: symbol directory not found: $symbol_dir"
+    exit 1
+fi
+
+# Find all .sym files in category subdirectories (not main.sym itself)
+sym_files=$(find "$symbol_dir" -mindepth 2 -name '*.sym' -type f 2>/dev/null)
+
+if [ -z "$sym_files" ]; then
+    echo "No symbol files found in $symbol_dir subdirectories"
+    # Create empty main.sym
+    > "$output"
+    exit 0
+fi
+
+# Concatenate all .sym files, sort by address (column 2)
+awk 1 $sym_files | sort -k2 -t' ' > "$output"
+
+count=$(wc -l < "$output")
+echo "Compiled $count symbols into $output"

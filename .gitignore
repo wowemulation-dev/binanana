@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+
+# Ghidra
+*.rep/
+*.gpr
+*.lock
+
+# Binary Ninja
+*.bndb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Generated files
+profile/*/symbol/main.sym
+
+# Serena
+.serena/

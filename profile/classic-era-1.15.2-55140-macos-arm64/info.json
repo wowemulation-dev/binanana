@@ -1,0 +1,12 @@
+{
+  "os": "darwin",
+  "arch": "arm64",
+  "module_name": "World of Warcraft Classic",
+  "module_base": "100000000",
+  "function_count": 0,
+  "version": "1.15.2",
+  "build": 55140,
+  "product": "wow_classic_era",
+  "source_path": "~/Downloads/wow_classic/1.15.2.55140.macos-arm64/_classic_era_/World of Warcraft Classic",
+  "notes": "macOS ARM64 build. First non-Windows Classic binary in collection."
+}

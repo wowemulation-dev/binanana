@@ -1,0 +1,13 @@
+{
+  "os": "windows",
+  "arch": "amd64",
+  "module_name": "Wow.exe",
+  "module_base": "140000000",
+  "function_count": 953,
+  "version": "1.13.2",
+  "build": 31650,
+  "product": "wow_classic",
+  "build_path": "d:\\buildserver\\wow\\2\\work\\shared-checkout\\branches\\wow-classic-1_13_2-branch-fastpatch-5\\",
+  "source_path": "~/Downloads/wow_classic/1.13.2.31650.windows-win64/_classic_/Wow.exe",
+  "notes": "First WoW Classic release. 64-bit PE, CFG enabled, obfuscated IAT, DX11-only, VP9 video, TACT/CASC."
+}
