@@ -88,7 +88,9 @@ binanana/
     validate_profile.py      # Check symbol integrity
   extension/
     build.gradle             # Gradle build for Ghidra extension
+    settings.gradle          # Project name (WowEmulation)
     extension.properties     # Extension metadata
+    Module.manifest          # Empty (no special module requirements)
     src/main/java/wowemulation/
       WowBinaryAnalyzer.java # WoW binary detection (auto-analysis)
   script/
@@ -382,6 +384,7 @@ python3.13 -m pyghidra.ghidra_launch --install-dir /opt/ghidra \
 
 | Version | Build | Product | Platform | Binary |
 |---------|-------|---------|----------|--------|
+| 3.13.3 | 9370 | Agent | windows-i386 | Agent.exe |
 | 1.13.2 | 31650 | Classic | windows-win64 | Wow.exe |
 | 1.14.0 | 40618 | Classic Era | windows-win64 | WowClassic.exe |
 | 1.14.1 | 41794 | Classic Era | windows-win64 | WowClassic.exe |
