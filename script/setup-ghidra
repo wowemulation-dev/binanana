@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+
+# Set up Ghidra for use with binanana analysis scripts.
+# Usage: ./script/setup-ghidra [--headless]
+#
+# Default: Full install with ghidra-mcp plugin.
+# --headless: Ghidra + headless analysis only, skip ghidra-mcp.
+
+set -euo pipefail
+
+# --- Configuration -----------------------------------------------------------
+GHIDRA_VERSION="12.0.3"
+GHIDRA_DATE="20260210"
+GHIDRA_SHA256="90d3fffb20b00030dcef8d2a24dd0f422d3a61e432b3ad43f77233ac6d667981"
+GHIDRA_INSTALL_DIR="/opt/ghidra"
+GHIDRA_MCP_VERSION="2.0.2"
+
+# Derived values
+GHIDRA_ZIP="ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_DATE}.zip"
+GHIDRA_URL="https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/${GHIDRA_ZIP}"
+GHIDRA_DIR_NAME="ghidra_${GHIDRA_VERSION}_PUBLIC"
+
+# Temp dirs (initialized empty for safe cleanup with set -u)
+tmpdir=""
+mcp_tmpdir=""
+cleanup() { rm -rf "$tmpdir" "$mcp_tmpdir"; }
+trap cleanup EXIT
+
+# --- Parse arguments ---------------------------------------------------------
+HEADLESS=false
+for arg in "$@"; do
+    case "$arg" in
+        --headless)
+            HEADLESS=true
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--headless]"
+            echo ""
+            echo "  --headless  Install Ghidra for headless analysis only (skip ghidra-mcp)"
+            echo "  (default)   Full install with ghidra-mcp plugin"
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            echo "Usage: $0 [--headless]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# --- Helper functions --------------------------------------------------------
+info() {
+    echo "==> $*"
+}
+
+error() {
+    echo "Error: $*" >&2
+    exit 1
+}
+
+# --- Step 1: Check prerequisites ---------------------------------------------
+info "Checking prerequisites"
+
+if [ ! -f /etc/fedora-release ]; then
+    error "This script requires Fedora. Found no /etc/fedora-release."
+fi
+
+if ! sudo -v 2>/dev/null; then
+    error "sudo access required."
+fi
+
+# --- Step 2: Install system packages -----------------------------------------
+info "Installing system packages"
+
+packages=(java-25-openjdk-devel wget unzip python3.13)
+if [ "$HEADLESS" = false ]; then
+    packages+=(maven python3-pip)
+fi
+
+sudo dnf install -y "${packages[@]}"
+
+# --- Step 3: Download and install Ghidra -------------------------------------
+install_needed=true
+
+if [ -d "$GHIDRA_INSTALL_DIR" ]; then
+    props="$GHIDRA_INSTALL_DIR/Ghidra/application.properties"
+    if [ -f "$props" ]; then
+        installed_version=$(grep '^application.version=' "$props" | cut -d= -f2)
+        if [ "$installed_version" = "$GHIDRA_VERSION" ]; then
+            info "Ghidra ${GHIDRA_VERSION} already installed at ${GHIDRA_INSTALL_DIR}"
+            install_needed=false
+        fi
+    fi
+fi
+
+if [ "$install_needed" = true ]; then
+    info "Downloading Ghidra ${GHIDRA_VERSION}"
+    tmpdir=$(mktemp -d)
+
+    wget -q --show-progress -O "$tmpdir/$GHIDRA_ZIP" "$GHIDRA_URL"
+
+    info "Verifying checksum"
+    echo "$GHIDRA_SHA256  $tmpdir/$GHIDRA_ZIP" | sha256sum -c - || \
+        error "SHA-256 checksum mismatch. Download may be corrupted."
+
+    info "Extracting Ghidra"
+    unzip -q "$tmpdir/$GHIDRA_ZIP" -d "$tmpdir"
+
+    if [ -d "$GHIDRA_INSTALL_DIR" ]; then
+        info "Removing previous Ghidra installation"
+        sudo rm -rf "$GHIDRA_INSTALL_DIR"
+    fi
+
+    sudo mv "$tmpdir/$GHIDRA_DIR_NAME" "$GHIDRA_INSTALL_DIR"
+    sudo chown -R root:root "$GHIDRA_INSTALL_DIR"
+    sudo chmod -R a+rX "$GHIDRA_INSTALL_DIR"
+
+    info "Ghidra installed to ${GHIDRA_INSTALL_DIR}"
+fi
+
+# --- Step 4: Apply HiDPI fix (Ghidra issue #8992) ----------------------------
+launch_props="$GHIDRA_INSTALL_DIR/support/launch.properties"
+hidpi_flag="VMARGS=-Dsun.java2d.dpiaware=true"
+
+if ! grep -qF "$hidpi_flag" "$launch_props" 2>/dev/null; then
+    info "Applying HiDPI fix to launch.properties"
+    echo "" | sudo tee -a "$launch_props" >/dev/null
+    echo "$hidpi_flag" | sudo tee -a "$launch_props" >/dev/null
+fi
+
+# --- Step 5: Configure environment -------------------------------------------
+profile_script="/etc/profile.d/ghidra.sh"
+
+if [ ! -f "$profile_script" ]; then
+    info "Creating ${profile_script}"
+    sudo tee "$profile_script" >/dev/null <<'ENVEOF'
+export GHIDRA_INSTALL_DIR=/opt/ghidra
+export PATH="$PATH:/opt/ghidra:/opt/ghidra/support"
+ENVEOF
+    sudo chmod 644 "$profile_script"
+fi
+
+# --- Step 6: Install PyGhidra (CPython 3 bridge) ----------------------------
+# PyGhidra enables Python 3 scripts in both GUI and headless mode.
+# Requires Python 3.9-3.13 (JPype1 wheels not available for 3.14+).
+info "Installing PyGhidra"
+
+PYGHIDRA_DIST="$GHIDRA_INSTALL_DIR/Ghidra/Features/PyGhidra/pypkg/dist"
+
+# Find a supported Python 3.x (3.9-3.13)
+PYGHIDRA_PYTHON=""
+for ver in 3.13 3.12 3.11 3.10 3.9; do
+    if command -v "python${ver}" &>/dev/null; then
+        PYGHIDRA_PYTHON="python${ver}"
+        break
+    fi
+done
+
+if [ -z "$PYGHIDRA_PYTHON" ]; then
+    echo "Warning: No Python 3.9-3.13 found. PyGhidra not installed." >&2
+    echo "  Headless Python scripts will not work without PyGhidra." >&2
+    echo "  Install python3.13 and re-run this script." >&2
+else
+    info "Using ${PYGHIDRA_PYTHON} for PyGhidra"
+    "$PYGHIDRA_PYTHON" -m pip install --user --no-index -f "$PYGHIDRA_DIST" pyghidra
+fi
+
+# --- Step 7: Install ghidra-mcp (full mode only) ----------------------------
+if [ "$HEADLESS" = false ]; then
+    info "Installing ghidra-mcp ${GHIDRA_MCP_VERSION}"
+
+    mcp_tmpdir=$(mktemp -d)
+
+    git clone --depth 1 --branch "v${GHIDRA_MCP_VERSION}" \
+        https://github.com/bethington/ghidra-mcp.git "$mcp_tmpdir/ghidra-mcp"
+
+    # Install Ghidra JARs into local Maven repository
+    info "Installing Ghidra JARs into local Maven repository"
+
+    install_jar() {
+        local jar_path="$1"
+        local artifact_id="$2"
+
+        if [ ! -f "$jar_path" ]; then
+            echo "Warning: JAR not found: $jar_path" >&2
+            return 1
+        fi
+
+        mvn install:install-file \
+            -Dfile="$jar_path" \
+            -DgroupId=ghidra \
+            -DartifactId="$artifact_id" \
+            -Dversion="${GHIDRA_VERSION}" \
+            -Dpackaging=jar \
+            -q
+    }
+
+    # Framework JARs
+    for name in Generic SoftwareModeling Project Docking Utility Gui FileSystem; do
+        install_jar "$GHIDRA_INSTALL_DIR/Ghidra/Framework/$name/lib/$name.jar" "$name"
+    done
+
+    # Features JARs
+    for name in Base Decompiler; do
+        install_jar "$GHIDRA_INSTALL_DIR/Ghidra/Features/$name/lib/$name.jar" "$name"
+    done
+
+    # Build ghidra-mcp
+    info "Building ghidra-mcp"
+    (cd "$mcp_tmpdir/ghidra-mcp" && mvn clean package assembly:single -DskipTests -q)
+
+    # Deploy extension JAR
+    ext_dir="$HOME/.ghidra/${GHIDRA_DIR_NAME}/Extensions/GhidraMCP/lib"
+    mkdir -p "$ext_dir"
+
+    built_jar="$mcp_tmpdir/ghidra-mcp/target/GhidraMCP-${GHIDRA_MCP_VERSION}.jar"
+    if [ ! -f "$built_jar" ]; then
+        error "ghidra-mcp build failed: expected $built_jar"
+    fi
+    cp "$built_jar" "$ext_dir/GhidraMCP.jar"
+    info "GhidraMCP.jar deployed to ${ext_dir}"
+
+    # Install Python bridge dependencies
+    info "Installing ghidra-mcp Python dependencies"
+    pip install --user 'mcp>=1.5.0,<2.0.0' 'requests>=2.28.0,<3.0.0'
+
+    # Deploy Python bridge
+    bridge_dir="$HOME/.local/share/ghidra-mcp"
+    mkdir -p "$bridge_dir"
+    cp "$mcp_tmpdir/ghidra-mcp/bridge_mcp_ghidra.py" "$bridge_dir/bridge_mcp_ghidra.py"
+    info "Python bridge deployed to ${bridge_dir}/bridge_mcp_ghidra.py"
+fi
+
+# --- Step 8: Summary ---------------------------------------------------------
+echo ""
+echo "--- Ghidra Setup Complete ---"
+echo ""
+echo "  Ghidra version:  ${GHIDRA_VERSION}"
+echo "  Install path:    ${GHIDRA_INSTALL_DIR}"
+echo "  JDK:             $(java -version 2>&1 | head -1)"
+if [ -n "$PYGHIDRA_PYTHON" ]; then
+    echo "  PyGhidra Python: ${PYGHIDRA_PYTHON}"
+fi
+echo ""
+echo "  Commands available (in new shell):"
+echo "    ghidraRun        - Launch Ghidra GUI"
+echo "    analyzeHeadless  - Run headless analysis (Java/Jython only)"
+echo ""
+echo "  For Python 3 scripts (required for binanana):"
+if [ -n "$PYGHIDRA_PYTHON" ]; then
+    echo "    ${PYGHIDRA_PYTHON} -m pyghidra.ghidra_launch --install-dir ${GHIDRA_INSTALL_DIR} \\"
+    echo "      ghidra.app.util.headless.AnalyzeHeadless <project_dir> <project_name> \\"
+    echo "      -import <binary> -postScript <script.py>"
+else
+    echo "    (PyGhidra not installed -- install Python 3.9-3.13 first)"
+fi
+echo ""
+
+if [ "$HEADLESS" = false ]; then
+    echo "  ghidra-mcp:      installed (v${GHIDRA_MCP_VERSION})"
+    echo "  Python bridge:   ${HOME}/.local/share/ghidra-mcp/bridge_mcp_ghidra.py"
+    echo ""
+    echo "  To activate ghidra-mcp:"
+    echo "    1. Launch Ghidra: ghidraRun"
+    echo "    2. File > Configure > Miscellaneous"
+    echo "    3. Enable 'GhidraMCPPlugin'"
+    echo ""
+fi
+
+echo "  Run 'source /etc/profile.d/ghidra.sh' to load environment in current shell."

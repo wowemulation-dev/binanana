@@ -1,7 +1,7 @@
 # Export named symbols from Ghidra to binanana .sym format.
 #
-# Usage: Run from Ghidra Script Manager or headless mode.
-# Prompts for output file path.
+# Usage (GUI): Run from Script Manager, prompts for output file path.
+# Usage (headless): -postScript export_symbols.py "/path/to/output.sym"
 #
 # Exports all user-named functions and data labels, skipping
 # auto-generated names (FUN_, DAT_, LAB_, etc.) and external/thunk
@@ -13,13 +13,19 @@
 #
 # @category binanana
 
-from ghidra.program.model.symbol.SourceType import *
+from ghidra.program.model.symbol import SourceType
 
 functionManager = currentProgram.getFunctionManager()
 symbolTable = currentProgram.getSymbolTable()
 listing = currentProgram.getListing()
 
-file_location = askFile("Choose output file", "Export")
+# Support both GUI (askFile) and headless (getScriptArgs) modes
+args = getScriptArgs()
+if args:
+    import java.io.File
+    file_location = java.io.File(args[0])
+else:
+    file_location = askFile("Choose output file", "Export")
 
 AUTO_PREFIXES = ("FUN_", "DAT_", "LAB_", "PTR_", "s_", "u_", "switch",
                  "caseD_", "CASE_", "thunk_FUN_")
@@ -82,7 +88,8 @@ def export_data_labels(f_out):
     return count
 
 
-with open(file_location.absolutePath, "w") as f_out:
+output_path = str(file_location.absolutePath) if hasattr(file_location, 'absolutePath') else str(file_location)
+with open(output_path, "w") as f_out:
     func_count = export_function_symbols(f_out)
     label_count = export_data_labels(f_out)
     print("Exported {} functions and {} data labels".format(

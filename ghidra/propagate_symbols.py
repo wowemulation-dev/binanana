@@ -22,7 +22,7 @@
 
 import hashlib
 import struct
-from ghidra.program.model.symbol.SourceType import *
+from ghidra.program.model.symbol import SourceType
 from ghidra.program.model.listing import CodeUnit
 
 memory = currentProgram.getMemory()
@@ -70,12 +70,14 @@ def compute_function_hash(func):
     return hasher.hexdigest()
 
 
-def export_hashes():
+def export_hashes(output_path=None):
     """Export function hashes for all named functions."""
-    out_file = askFile("Save function hashes", "Export")
+    if output_path is None:
+        out_file = askFile("Save function hashes", "Export")
+        output_path = out_file.absolutePath
 
     count = 0
-    with open(out_file.absolutePath, "w") as f:
+    with open(str(output_path), "w") as f:
         f.write("# Function hashes for cross-version matching\n")
         f.write("# hash | address | name | size\n")
 
@@ -99,17 +101,18 @@ def export_hashes():
             f.write("{} {:016X} {} {}\n".format(func_hash, addr, name, size))
             count += 1
 
-    print("Exported {} function hashes to {}".format(
-        count, out_file.absolutePath))
+    print("Exported {} function hashes to {}".format(count, output_path))
 
 
-def import_and_match():
+def import_and_match(input_path=None):
     """Import hashes from a source binary and match against current."""
-    in_file = askFile("Select source hash file", "Import")
+    if input_path is None:
+        in_file = askFile("Select source hash file", "Import")
+        input_path = in_file.absolutePath
 
     # Load source hashes
     source_hashes = {}  # hash -> (addr, name, size)
-    with open(in_file.absolutePath, "r") as f:
+    with open(str(input_path), "r") as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#"):
@@ -164,14 +167,25 @@ def import_and_match():
     print("  Source hashes available: {}".format(len(source_hashes)))
 
 
-# Ask user which mode to run
-choice = askChoice("Propagate Symbols",
-                   "Select operation:",
-                   ["Export hashes from this binary",
-                    "Import and match from source hashes"],
-                   "Export hashes from this binary")
-
-if "Export" in choice:
-    export_hashes()
+# Headless mode: first arg is "export" or "import", second arg is file path
+# GUI mode: prompts via askChoice/askFile
+headless_args = getScriptArgs()
+if headless_args:
+    mode = headless_args[0].lower()
+    file_path = headless_args[1] if len(headless_args) > 1 else None
+    if mode == "export":
+        export_hashes(file_path)
+    elif mode == "import":
+        import_and_match(file_path)
+    else:
+        print("Unknown mode '{}'. Use 'export' or 'import'.".format(mode))
 else:
-    import_and_match()
+    choice = askChoice("Propagate Symbols",
+                       "Select operation:",
+                       ["Export hashes from this binary",
+                        "Import and match from source hashes"],
+                       "Export hashes from this binary")
+    if "Export" in choice:
+        export_hashes()
+    else:
+        import_and_match()

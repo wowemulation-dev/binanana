@@ -1,5 +1,6 @@
 PROFILES := $(wildcard profile/*)
 PROFILE ?= profile/classic-1.13.2-31650-windows-win64
+BINARY ?=
 
 all: compile-symbols
 
@@ -33,10 +34,17 @@ clean:
 export-from-binja:
 	./script/export-from-binja $(PROFILE)
 
+analyze:
+	@if [ -z "$(BINARY)" ]; then \
+		echo "Usage: make analyze BINARY=/path/to/binary [PROFILE=...]"; \
+		exit 1; \
+	fi
+	./script/analyze "$(BINARY)" $(PROFILE)
+
 setup-ghidra:
 	./script/setup-ghidra
 
 setup-ghidra-headless:
 	./script/setup-ghidra --headless
 
-.PHONY: all compile-symbols compile-symbols-one validate validate-all clean export-from-binja setup-ghidra setup-ghidra-headless
+.PHONY: all compile-symbols compile-symbols-one validate validate-all clean export-from-binja analyze setup-ghidra setup-ghidra-headless

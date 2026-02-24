@@ -24,9 +24,14 @@ All Classic clients are 64-bit x86-64 Windows PE binaries with:
 - [Symbol files](#symbol-files)
 - [Header files](#header-files)
 - [Ghidra](#ghidra)
+  - [Setup](#setup)
   - [Headless analysis](#headless-analysis)
+  - [GUI mode](#gui-mode)
+  - [Script compatibility](#script-compatibility)
   - [Importing symbols](#importing-symbols)
   - [Importing C headers](#importing-c-headers)
+  - [Ghidra server](#ghidra-server)
+- [Binary Ninja](#binary-ninja)
 - [Cross-version propagation](#cross-version-propagation)
 - [Available profiles](#available-profiles)
 
@@ -44,14 +49,19 @@ The project has three layers:
 
 ## Dependencies
 
-- Python >= 3.11
-- Ghidra >= 11.0 (for analysis scripts)
+- Python 3.9-3.13 (PyGhidra requires JPype1 which has no 3.14+ wheels)
+- Ghidra >= 12.0 (for PyGhidra CPython 3 script support)
 - Make
 - Bash shell
+- JDK 21+ (installed by setup-ghidra)
+
+For Binary Ninja workflows:
+
+- Binary Ninja with binary_ninja_mcp plugin
 
 ## Project structure
 
-```
+```text
 binanana/
   profile/
     {version}-{platform}-{arch}/
@@ -75,8 +85,10 @@ binanana/
     compile_symbols.py       # Merge category .sym files into main.sym
     validate_profile.py      # Check symbol integrity
   script/
-    compile-symbols          # Shell wrapper for symbol compilation
     analyze                  # Run Ghidra headless analysis pipeline
+    compile-symbols          # Shell wrapper for symbol compilation
+    export-from-binja        # Export symbols from Binary Ninja
+    setup-ghidra             # Install Ghidra + PyGhidra + ghidra-mcp
   Makefile
 ```
 
@@ -85,7 +97,7 @@ binanana/
 Symbol files map addresses to functions and data labels. The format is
 compatible with Ghidra's `ImportSymbolsScript.py`:
 
-```
+```text
 FunctionName 00000001400AD020 f end=00000001400AD0A3
 DataLabel 0000000142B60E20 l
 FunctionName 00000001400B1470 f end=00000001400B1590 type="int64_t __fastcall func(void*)"
@@ -119,15 +131,60 @@ handling:
 
 ## Ghidra
 
-### Headless analysis
+### Setup
 
-Run the automated analysis pipeline on a new binary:
+Install Ghidra and PyGhidra (Fedora):
 
 ```bash
-./script/analyze <ghidra-project-dir> <binary-path> <profile-dir>
+# Full install (Ghidra GUI + PyGhidra + ghidra-mcp)
+make setup-ghidra
+
+# Headless only (Ghidra + PyGhidra, no GUI plugins)
+make setup-ghidra-headless
 ```
 
-This runs in Ghidra's headless mode and executes:
+This installs:
+
+- Ghidra 12.0.3 to `/opt/ghidra`
+- JDK 25
+- Python 3.13 (required for PyGhidra; 3.14+ is not supported)
+- PyGhidra 3.0.2 + JPype1 (from Ghidra's bundled wheels)
+- ghidra-mcp 2.0.2 (full mode only)
+
+After installation, load the environment:
+
+```bash
+source /etc/profile.d/ghidra.sh
+```
+
+### Headless analysis
+
+Ghidra has two headless launchers:
+
+| Launcher | Scripts | Use case |
+|----------|---------|----------|
+| `analyzeHeadless` | Java and Jython (Python 2.7) only | Legacy scripts |
+| PyGhidra headless | CPython 3.9-3.13 | binanana scripts |
+
+The binanana scripts use Python 3 and must run through PyGhidra.
+
+Run the full analysis pipeline:
+
+```bash
+./script/analyze <binary-path> <profile-dir>
+```
+
+Example:
+
+```bash
+./script/analyze ~/Downloads/wow_classic/Wow.exe \
+    profile/classic-1.13.2-31650-windows-win64
+```
+
+The script creates a temporary Ghidra project directory that is
+automatically cleaned up on exit.
+
+This executes four post-scripts:
 
 1. `analyze_rtti.py` -- Walk RTTI type_info -> COL -> vtable chains
 2. `analyze_lua_api.py` -- Resolve Lua API Usage: strings to native
@@ -135,11 +192,73 @@ This runs in Ghidra's headless mode and executes:
 3. `analyze_strings.py` -- Extract source paths and debug strings
 4. `export_symbols.py` -- Export all named symbols to .sym format
 
+To run individual scripts:
+
+```bash
+python3.13 -m pyghidra.ghidra_launch \
+    --install-dir /opt/ghidra \
+    ghidra.app.util.headless.AnalyzeHeadless \
+    /tmp/ghidra_project project_name \
+    -import /path/to/binary \
+    -postScript ghidra/analyze_rtti.py "/path/to/output.txt" \
+    -overwrite -deleteProject
+```
+
+Script arguments are passed after the script path. Each script accepts
+an optional output file path as its first argument. Without an argument,
+results print to stdout only.
+
+### GUI mode
+
+Launch Ghidra:
+
+```bash
+ghidraRun
+```
+
+The binanana scripts are in the `ghidra/` directory. To use them:
+
+1. Window -> Script Manager
+2. Script Directories -> Add: `<repo>/ghidra/`
+3. Filter by "binanana" category
+4. Run any script (they prompt for file paths in GUI mode)
+
+All scripts work in both GUI and headless modes. In GUI mode they use
+`askFile()` prompts; in headless mode they accept `getScriptArgs()`.
+
+### Script compatibility
+
+The Ghidra scripts use PyGhidra-compatible imports:
+
+```python
+# Correct (works in PyGhidra and Jython):
+from ghidra.program.model.symbol import SourceType
+
+# Broken in PyGhidra (JPype enum wildcard import issue):
+from ghidra.program.model.symbol.SourceType import *
+```
+
+JPype does not support wildcard imports from Java enum types. Use direct
+imports (`import SourceType`) and qualify constants as
+`SourceType.DEFAULT`, `SourceType.ANALYSIS`, etc.
+
 ### Importing symbols
 
 1. Open Ghidra -> Window -> Script Manager
-2. Run `ImportSymbolsScript.py` (built-in)
+2. Run `import_symbols.py` from the binanana category
 3. Select `profile/<version>/symbol/main.sym`
+
+Or in headless mode:
+
+```bash
+python3.13 -m pyghidra.ghidra_launch \
+    --install-dir /opt/ghidra \
+    ghidra.app.util.headless.AnalyzeHeadless \
+    /tmp/project project_name \
+    -process binary.exe \
+    -postScript ghidra/import_symbols.py "profile/version/symbol/main.sym" \
+    -noanalysis
+```
 
 ### Importing C headers
 
@@ -150,15 +269,58 @@ This runs in Ghidra's headless mode and executes:
 5. Add `-DGHIDRA` to parse options
 6. Press Parse to Program
 
+### Ghidra server
+
+The Ghidra archive includes a server (`/opt/ghidra/server/`) for
+collaborative multi-user repository sharing. This is not required for
+binanana's headless analysis workflow. It is useful if multiple analysts
+need to share a Ghidra project database.
+
+See `/opt/ghidra/server/svrREADME.md` for server setup.
+
+## Binary Ninja
+
+For binaries loaded in Binary Ninja with the binary_ninja_mcp plugin:
+
+```bash
+# Export user-named symbols from BN to binanana format
+./script/export-from-binja profile/classic-1.13.2-31650-windows-win64
+
+# Or via Make
+make export-from-binja PROFILE=profile/classic-1.13.2-31650-windows-win64
+```
+
+This connects to BN's HTTP API at `localhost:9009`, exports user-named
+functions and data labels, and writes to `symbol/export/func.sym` and
+`symbol/export/label.sym`.
+
 ## Cross-version propagation
 
 The `propagate_symbols.py` script matches functions across binary
 versions using instruction-level hashing. Workflow:
 
-1. Thoroughly analyze one version (e.g., 1.13.2)
-2. Run `propagate_symbols.py --source 1.13.2 --target 1.14.0`
-3. Review and commit matched symbols for the target version
-4. Manually analyze only the delta (new/changed functions)
+1. Analyze one version thoroughly (e.g., 1.13.2)
+2. Open the analyzed binary in Ghidra, run `propagate_symbols.py` with
+   mode "export" to save function hashes
+3. Open the target binary, run `propagate_symbols.py` with mode "import"
+   and the hash file from step 2
+4. Review matched symbols and commit to the target profile
+
+In headless mode:
+
+```bash
+# Export hashes from source binary
+python3.13 -m pyghidra.ghidra_launch --install-dir /opt/ghidra \
+    ghidra.app.util.headless.AnalyzeHeadless /tmp/project src \
+    -process Wow_1.13.2.exe -noanalysis \
+    -postScript ghidra/propagate_symbols.py "export" "/tmp/hashes.txt"
+
+# Import and match against target binary
+python3.13 -m pyghidra.ghidra_launch --install-dir /opt/ghidra \
+    ghidra.app.util.headless.AnalyzeHeadless /tmp/project tgt \
+    -process Wow_1.14.0.exe -noanalysis \
+    -postScript ghidra/propagate_symbols.py "import" "/tmp/hashes.txt"
+```
 
 ## Available profiles
 

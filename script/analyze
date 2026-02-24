@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+# Run Ghidra headless analysis pipeline on a binary.
+#
+# Usage: ./script/analyze <binary-path> <profile-dir>
+#
+# Runs the binanana Ghidra scripts via PyGhidra headless mode:
+#   1. analyze_rtti.py    -- Walk RTTI type_info -> COL -> vtable chains
+#   2. analyze_lua_api.py -- Resolve Lua API Usage: strings
+#   3. analyze_strings.py -- Extract source paths and debug strings
+#   4. export_symbols.py  -- Export all named symbols to .sym format
+#
+# Creates a temporary Ghidra project directory that is cleaned up on exit.
+# Requires PyGhidra (run `make setup-ghidra-headless` first).
+
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <binary-path> <profile-dir>" >&2
+    echo "" >&2
+    echo "  binary-path  Path to the PE binary to analyze" >&2
+    echo "  profile-dir  binanana profile directory for output" >&2
+    exit 1
+fi
+
+BINARY_PATH="$1"
+PROFILE_DIR="$2"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+GHIDRA_SCRIPTS="$REPO_DIR/ghidra"
+GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
+
+# Create a temporary project directory, cleaned up on exit
+PROJECT_DIR="$(mktemp -d "${TMPDIR:-/var/tmp}/binanana-ghidra.XXXXXXXXXX")"
+cleanup() { rm -rf "$PROJECT_DIR"; }
+trap cleanup EXIT
+
+# Find PyGhidra-compatible Python
+PYTHON=""
+for ver in 3.13 3.12 3.11 3.10 3.9; do
+    if command -v "python${ver}" &>/dev/null; then
+        PYTHON="python${ver}"
+        break
+    fi
+done
+
+if [ -z "$PYTHON" ]; then
+    echo "Error: No Python 3.9-3.13 found. Install python3.13 first." >&2
+    exit 1
+fi
+
+# Verify pyghidra is installed
+if ! "$PYTHON" -c "import pyghidra" 2>/dev/null; then
+    echo "Error: pyghidra not installed. Run 'make setup-ghidra-headless' first." >&2
+    exit 1
+fi
+
+# Read architecture from info.json to set processor
+ARCH="x86:LE:64:default"
+INFO_JSON="$PROFILE_DIR/info.json"
+if [ -f "$INFO_JSON" ]; then
+    profile_arch=$("$PYTHON" -c "import json; print(json.load(open('$INFO_JSON'))['arch'])" 2>/dev/null || echo "amd64")
+    case "$profile_arch" in
+        i386)   ARCH="x86:LE:32:default" ;;
+        amd64)  ARCH="x86:LE:64:default" ;;
+        arm64)  ARCH="AARCH64:LE:64:AppleSilicon" ;;
+    esac
+fi
+
+PROJECT_NAME="binanana_$(basename "$PROFILE_DIR")"
+OUTPUT_DIR="$PROFILE_DIR/ghidra_output"
+mkdir -p "$OUTPUT_DIR"
+
+echo "=== binanana Ghidra Analysis Pipeline ==="
+echo "Binary:  $BINARY_PATH"
+echo "Profile: $PROFILE_DIR"
+echo "Arch:    $ARCH"
+echo "Python:  $PYTHON"
+echo "Project: $PROJECT_DIR (temporary)"
+echo ""
+
+PYGHIDRA_CMD="$PYTHON -m pyghidra.ghidra_launch --install-dir $GHIDRA_INSTALL_DIR ghidra.app.util.headless.AnalyzeHeadless"
+
+# Run analysis with all scripts
+echo "Starting headless analysis (this takes several minutes)..."
+$PYGHIDRA_CMD "$PROJECT_DIR" "$PROJECT_NAME" \
+    -import "$BINARY_PATH" \
+    -processor "$ARCH" \
+    -postScript "$GHIDRA_SCRIPTS/analyze_rtti.py" "$OUTPUT_DIR/rtti.txt" \
+    -postScript "$GHIDRA_SCRIPTS/analyze_lua_api.py" "$OUTPUT_DIR/lua_api.txt" \
+    -postScript "$GHIDRA_SCRIPTS/analyze_strings.py" "$OUTPUT_DIR/strings.txt" \
+    -postScript "$GHIDRA_SCRIPTS/export_symbols.py" "$OUTPUT_DIR/symbols.sym" \
+    -overwrite
+
+echo ""
+echo "=== Analysis Complete ==="
+echo "Output files:"
+for f in "$OUTPUT_DIR"/*; do
+    if [ -f "$f" ]; then
+        lines=$(wc -l < "$f")
+        echo "  $(basename "$f"): $lines lines"
+    fi
+done

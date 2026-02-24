@@ -15,10 +15,13 @@
 # Output: Names vtables, COLs, and virtual methods in the Ghidra
 # database. Optionally exports results to a .sym file.
 #
+# Usage (GUI): Run from Script Manager, optionally saves results.
+# Usage (headless): -postScript analyze_rtti.py ["/path/to/output.txt"]
+#
 # @category binanana
 
 import struct
-from ghidra.program.model.symbol.SourceType import *
+from ghidra.program.model.symbol import SourceType
 
 memory = currentProgram.getMemory()
 functionManager = currentProgram.getFunctionManager()
@@ -297,10 +300,21 @@ def analyze_rtti():
     print("  Total virtual methods named: {}".format(
         sum(r["vfunc_count"] for r in results)))
 
-    # Optionally export to file
-    try:
-        out_file = askFile("Save RTTI analysis results? (Cancel to skip)", "Save")
-        with open(out_file.absolutePath, "w") as f:
+    # Export results to file
+    # In headless mode: use script arg; in GUI mode: prompt user
+    output_path = None
+    headless_args = getScriptArgs()
+    if headless_args:
+        output_path = headless_args[0]
+    else:
+        try:
+            out_file = askFile("Save RTTI analysis results? (Cancel to skip)", "Save")
+            output_path = out_file.absolutePath
+        except Exception:
+            pass
+
+    if output_path:
+        with open(str(output_path), "w") as f:
             f.write("# RTTI Analysis Results\n")
             f.write("# class_name | type_info | col | vtable | vfunc_count\n")
             for r in results:
@@ -309,9 +323,9 @@ def analyze_rtti():
                     r["col"] if r["col"] else 0,
                     r["vtable"] if r["vtable"] else 0,
                     r["vfunc_count"]))
-        print("Results saved to {}".format(out_file.absolutePath))
-    except Exception:
-        print("Results not saved to file (cancelled)")
+        print("Results saved to {}".format(output_path))
+    else:
+        print("Results not saved to file")
 
 
 analyze_rtti()

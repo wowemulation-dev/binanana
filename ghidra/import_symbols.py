@@ -1,7 +1,7 @@
 # Import binanana .sym symbols into Ghidra.
 #
-# Usage: Run from Ghidra Script Manager or headless mode.
-# Prompts for .sym file path.
+# Usage (GUI): Run from Script Manager, prompts for .sym file path.
+# Usage (headless): -postScript import_symbols.py "/path/to/input.sym"
 #
 # Creates functions at 'f' entries (with end address if provided),
 # creates labels at 'l' entries. Skips entries where a user-defined
@@ -9,14 +9,20 @@
 #
 # @category binanana
 
-from ghidra.program.model.symbol.SourceType import *
+from ghidra.program.model.symbol import SourceType
 
 functionManager = currentProgram.getFunctionManager()
 symbolTable = currentProgram.getSymbolTable()
 listing = currentProgram.getListing()
 addressSpace = currentProgram.getAddressFactory().getDefaultAddressSpace()
 
-file_location = askFile("Choose .sym file to import", "Import")
+# Support both GUI (askFile) and headless (getScriptArgs) modes
+args = getScriptArgs()
+if args:
+    import java.io.File
+    file_location = java.io.File(args[0])
+else:
+    file_location = askFile("Choose .sym file to import", "Import")
 
 
 def parse_attributes(parts):
@@ -46,7 +52,8 @@ def import_symbols():
     count_label = 0
     count_skip = 0
 
-    with open(file_location.absolutePath, "r") as f:
+    input_path = str(file_location.absolutePath) if hasattr(file_location, 'absolutePath') else str(file_location)
+    with open(input_path, "r") as f:
         for line_num, line in enumerate(f, 1):
             monitor.checkCanceled()
 

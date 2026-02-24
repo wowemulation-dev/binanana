@@ -10,11 +10,14 @@
 # 3. Traces from the LEA to find the associated native function pointer
 # 4. Names the native function based on the Lua API name
 #
+# Usage (GUI): Run from Script Manager, optionally saves results.
+# Usage (headless): -postScript analyze_lua_api.py ["/path/to/output.txt"]
+#
 # @category binanana
 
 import re
 import struct
-from ghidra.program.model.symbol.SourceType import *
+from ghidra.program.model.symbol import SourceType
 
 memory = currentProgram.getMemory()
 functionManager = currentProgram.getFunctionManager()
@@ -198,10 +201,20 @@ def analyze_lua_api():
         for addr, name in unresolved[:20]:
             print("  {:016X} {}".format(addr, name))
 
-    # Optionally export
-    try:
-        out_file = askFile("Save Lua API results? (Cancel to skip)", "Save")
-        with open(out_file.absolutePath, "w") as f:
+    # Export results to file
+    output_path = None
+    headless_args = getScriptArgs()
+    if headless_args:
+        output_path = headless_args[0]
+    else:
+        try:
+            out_file = askFile("Save Lua API results? (Cancel to skip)", "Save")
+            output_path = out_file.absolutePath
+        except Exception:
+            pass
+
+    if output_path:
+        with open(str(output_path), "w") as f:
             f.write("# Lua API Analysis Results\n")
             f.write("# string_addr | function_name | params | resolved\n")
             for string_addr, usage_str in usage_entries:
@@ -210,9 +223,9 @@ def analyze_lua_api():
                 f.write("{:016X} {} {} {}\n".format(
                     string_addr, func_name, params,
                     "resolved" if is_resolved else "unresolved"))
-        print("Results saved to {}".format(out_file.absolutePath))
-    except Exception:
-        print("Results not saved to file (cancelled)")
+        print("Results saved to {}".format(str(output_path)))
+    else:
+        print("Results not saved to file")
 
 
 analyze_lua_api()

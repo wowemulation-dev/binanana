@@ -12,10 +12,13 @@
 # - CVar registration strings
 # - Assert/debug format strings
 #
+# Usage (GUI): Run from Script Manager, optionally saves results.
+# Usage (headless): -postScript analyze_strings.py ["/path/to/output.txt"]
+#
 # @category binanana
 
 import struct
-from ghidra.program.model.symbol.SourceType import *
+from ghidra.program.model.symbol import SourceType
 
 memory = currentProgram.getMemory()
 addressSpace = currentProgram.getAddressFactory().getDefaultAddressSpace()
@@ -142,10 +145,20 @@ def analyze_strings():
     print("JamJSON types: {}".format(len(jam_types)))
     print("CVar references: {}".format(len(cvar_refs)))
 
-    # Export
-    try:
-        out_file = askFile("Save string analysis? (Cancel to skip)", "Save")
-        with open(out_file.absolutePath, "w") as f:
+    # Export results to file
+    output_path = None
+    headless_args = getScriptArgs()
+    if headless_args:
+        output_path = headless_args[0]
+    else:
+        try:
+            out_file = askFile("Save string analysis? (Cancel to skip)", "Save")
+            output_path = out_file.absolutePath
+        except Exception:
+            pass
+
+    if output_path:
+        with open(str(output_path), "w") as f:
             f.write("# String Analysis Results\n\n")
 
             f.write("## Source File Paths ({})\n\n".format(len(source_paths)))
@@ -165,9 +178,9 @@ def analyze_strings():
             for addr, s in cvar_refs:
                 f.write("{:016X} {}\n".format(addr, s))
 
-        print("\nResults saved to {}".format(out_file.absolutePath))
-    except Exception:
-        print("Results not saved to file (cancelled)")
+        print("\nResults saved to {}".format(str(output_path)))
+    else:
+        print("Results not saved to file")
 
 
 analyze_strings()
