@@ -1,0 +1,47 @@
+; net/func.sym -- Networking functions
+; No functions identified: xrefs non-functional in this binary.
+; Source file strings confirm networking code exists but cannot be
+; traced to .text addresses without working cross-references.
+;
+; Known source files (from __FILE__ strings):
+;   engine/source/os/w32/ostcp.cpp
+;   wow/source/net/netclient/netclient.cpp
+;   wow/source/net/netinternal.cpp
+;   wow/source/wowconnection/wowconnection.cpp
+;   wow/source/wowconnection/packetpipe.cpp
+;   wow/source/wowconnection/wdatastore.cpp
+;   wow/source/wowbattlenet/wowbgsconnection.cpp
+;   wow/source/wowservices/httpprotocol.cpp
+;   wow/source/wowservices/websocketconnection.cpp
+;   wow/source/wowservices/packetpipe_clisvr.cpp
+;   wow/source/wowservices/jamjson.cpp
+;   wow/source/wowservices/jamjsonzlib.cpp
+;   wow/source/wowservices/realmlist.cpp
+;   wow/source/wowservices/agentcommunicator.cpp
+;   wow/source/wowservices/curlthunks.cpp
+;   wow/source/wowbattlenet/ibattlenet.cpp
+;   battle.net.aurora/src/low/rpc/rpc_connection.cpp
+;   battle.net.aurora/src/low/rpc/rpc_connection_manager.cpp
+;   battle.net.aurora/src/low/rpc/rpc_status_queue.cpp
+;   battle.net.aurora/src/low/rpc/rpc_metering.cpp
+;   battle.net.aurora/src/low/rpc/rpc_metering_queue.cpp
+;   battle.net.aurora/src/low/rpc/rpc_metering_config.cpp
+;   battle.net.aurora/src/low/rpc/transport_v0/rpc_frame_transport_default.cpp
+;   battle.net.aurora/src/low/rpc/transport_v1/websocket_rpc_frame_transport.cpp
+;   battle.net.aurora/src/low/network/network_connection.cpp
+;   battle.net.aurora/src/low/network/network_connection_dependencies.cpp
+;   battle.net.aurora/src/low/ssl/ssl.cpp
+;   battle.net.aurora/src/low/ssl/ssl_system.cpp
+;   battle.net.aurora/src/low/ssl/ssl_filter.cpp
+;   battle.net.aurora/src/low/ssl/ssl_cert_bundle.cpp
+;   battle.net.aurora/src/low/ssl/ssl_impl/schannel/schannel.cpp
+;   battle.net.aurora/src/low/ssl/ssl_impl/schannel/schannel_filter.cpp
+;   battle.net.aurora/src/low/ssl/ssl_impl/schannel/schannel_filter_factory.cpp
+;   battle.net.aurora/src/low/ssl/cert_bundle_downloader_factory_impl.cpp
+;   battle.net.aurora/src/low/ssl/cert_bundle_downloader_impl.cpp
+;   battle.net.aurora/src/low/url/url_impl/curl/url_curl.cpp
+;   battle.net.aurora/src/low/websocket/websocket_desktop/websocket_frame_desktop.cpp
+;   battle.net.aurora/src/low/service/club/club_cache.cpp
+;   battle.net.aurora/src/common/var/var_data.cpp
+;   battle.net.aurora/src/common/var/scope.cpp
+;   battle.net.aurora/src/low/core/bgs_low.cpp

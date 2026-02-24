@@ -1,0 +1,115 @@
+; net/label.sym -- Networking data labels (sorted by address)
+; RTTI type_info entries for bgs::/bnl:: types, source file path
+; strings for game networking and Aurora SDK modules, and Winsock
+; dynamic loading strings.
+;
+; Source path strings: game networking
+str__netclient_cpp_path 0000000141C23E40 l ; wow/source/net/netclient/netclient.cpp
+str__NetClient_HandleConnect 0000000141C23FD0 l ; debug message
+str__NetClient_HandleDisconnect 0000000141C23FF0 l ; debug message
+str__NetClient_HandleCantConnect 0000000141C24010 l ; debug message
+str__netinternal_h_path 0000000141C24190 l ; wow/source/net/netinternal.h
+str__netinternal_cpp_path 0000000141C24210 l ; wow/source/net/netinternal.cpp
+str__ibattlenet_cpp_path 0000000141CADAE0 l ; wow/source/wowbattlenet/ibattlenet.cpp
+str__wowconnection_cpp_path 0000000141CB41F0 l ; wow/source/wowconnection/wowconnection.cpp
+str__WowConnection_StartConnect_failed 0000000141CB4338 l ; error message
+str__wdatastore_cpp_path 0000000141CB43E0 l ; wow/source/wowconnection/wdatastore.cpp
+str__packetpipe_cpp_path 0000000141CB44F0 l ; wow/source/wowconnection/packetpipe.cpp
+str__JamServerSpec 0000000141CBF918 l ; JSON struct name
+str__packetpipe_clisvr_cpp_path 0000000141CBFB30 l ; wow/source/wowservices/packetpipe_clisvr.cpp
+str__jamjson_cpp_path 0000000141CBFE10 l ; wow/source/wowservices/jamjson.cpp
+str__curlthunks_cpp_path 0000000141CC01E0 l ; wow/source/wowservices/curlthunks.cpp
+str__agentcommunicator_cpp_path 0000000141CC3770 l ; wow/source/wowservices/agentcommunicator.cpp
+str__realmlist_cpp_path 0000000141CC3C30 l ; wow/source/wowservices/realmlist.cpp
+str__websocketconnection_cpp_path 0000000141CC3F60 l ; wow/source/wowservices/websocketconnection.cpp
+;
+; Source path strings: Aurora SDK
+str__var_data_cpp_path 0000000141CCEE50 l ; common/var/var_data.cpp
+str__scope_cpp_path 0000000141CCEEE0 l ; common/var/scope.cpp
+str__bgs_low_cpp_path 0000000141CCF390 l ; low/core/bgs_low.cpp
+str__club_cache_cpp_path 0000000141CCF8C0 l ; service/club/club_cache.cpp
+str__url_curl_cpp_path 0000000141CD0120 l ; url/url_impl/curl/url_curl.cpp
+str__rpc_connection_cpp_path 0000000141CD03C0 l ; rpc/rpc_connection.cpp
+str__rpc_connection_manager_cpp_path 0000000141CD0930 l ; rpc/rpc_connection_manager.cpp
+str__ssl_system_cpp_path 0000000141CD0BB0 l ; ssl/ssl_system.cpp
+str__schannel_filter_factory_cpp_path 0000000141CD0E60 l ; schannel/schannel_filter_factory.cpp
+str__cert_bundle_downloader_factory_impl_cpp_path 0000000141CD0F20 l ; ssl/cert_bundle_downloader_factory_impl.cpp
+str__ssl_cert_bundle_cpp_path 0000000141CD1040 l ; ssl/ssl_cert_bundle.cpp
+str__schannel_filter_cpp_path 0000000141CD13E0 l ; schannel/schannel_filter.cpp
+str__rpc_frame_transport_default_cpp_path 0000000141CD2030 l ; transport_v0/rpc_frame_transport_default.cpp
+str__websocket_rpc_frame_transport_cpp_path 0000000141CD2280 l ; transport_v1/websocket_rpc_frame_transport.cpp
+str__rpc_status_queue_cpp_path 0000000141CD2470 l ; rpc/rpc_status_queue.cpp
+str__rpc_metering_cpp_path 0000000141CD2590 l ; rpc/rpc_metering.cpp
+str__rpc_metering_queue_cpp_path 0000000141CD2780 l ; rpc/rpc_metering_queue.cpp
+str__cert_bundle_downloader_impl_cpp_path 0000000141CD2CA0 l ; ssl/cert_bundle_downloader_impl.cpp
+str__ssl_filter_cpp_path 0000000141CD3000 l ; ssl/ssl_filter.cpp
+str__schannel_cpp_path 0000000141CD3140 l ; schannel/schannel.cpp
+str__network_connection_cpp_path 0000000141CD3360 l ; network/network_connection.cpp
+str__websocket_frame_desktop_cpp_path 0000000141CD39C0 l ; websocket_desktop/websocket_frame_desktop.cpp
+str__rpc_metering_config_cpp_path 0000000141CD3B00 l ; rpc/rpc_metering_config.cpp
+str__network_connection_dependencies_cpp_path 0000000141CD3D20 l ; network/network_connection_dependencies.cpp
+;
+; Winsock and OS TCP strings
+str__getaddrinfo_thread_failed 0000000141D4A3B0 l ; DNS thread error
+str__WSAStartup_failed 0000000141DCC220 l ; ostcp.cpp init error
+str__WSAStartup_wrong_version 0000000141DCC238 l ; ostcp.cpp init error
+str__ostcp_cpp_path 0000000141DCC350 l ; engine/source/os/w32/ostcp.cpp
+str__OsTcp_Base 0000000141DCCA00 l ; thread pool name
+str__ws2_32_dll 0000000141DCCA48 l ; dynamic Winsock load
+str__WSASend 0000000141DCCA58 l ; GetProcAddress target
+str__WSARecv 0000000141DCCA60 l ; GetProcAddress target
+str__OsTcp_Listen 0000000141DCCA68 l ; thread pool name
+str__OsTcp_UdpPump 0000000141DCCA78 l ; thread pool name
+str__OsTcp_DNS 0000000141DCCA88 l ; thread pool name
+str__wowbgsconnection_cpp_path 0000000141DCDB20 l ; wow/source/wowbattlenet/wowbgsconnection.cpp
+str__httpprotocol_cpp_path 0000000141DCDF20 l ; wow/source/wowservices/httpprotocol.cpp
+;
+; RTTI type_info: WowConnection container types
+TSFixedArray_WowConnection__type_info 00000001421DB9B0 l ; TSFixedArray<WowConnection*>
+TSGrowableArray_WowConnection__type_info 00000001421DBA10 l ; TSGrowableArray<WowConnection*>
+;
+; RTTI type_info: bgs:: Club veiled types
+bgs__ClubContentChainVeiled__type_info 00000001421F6FB8 l
+bgs__ClubMemberIdVeiled__type_info 00000001421F6FF0 l
+bgs__ClubMemberDescriptionVeiled__type_info 00000001421F7020 l
+;
+; RTTI type_info: bgs:: protocol types
+bgs__protocol__EntityId__type_info 00000001421FFBE8 l ; bgs::protocol::EntityId
+bgs__ClubInvitationVeiled__type_info 0000000142200838 l
+bgs__ClubMembershipDescriptionVeiled__type_info 0000000142200868 l
+bgs__ClubStreamMessageVeiled__type_info 0000000142205168 l
+bgs__ClubRecordVeiled__StreamChange__type_info 00000001422051E0 l
+bgs__ClubRecordVeiled__BanChange__type_info 0000000142207A50 l
+bgs__ClubRecordVeiled__TicketChange__type_info 0000000142207A88 l
+bgs__ClubRecordVeiled__InvitationChange__type_info 0000000142207AC0 l
+bgs__ClubRecordVeiled__MemberChange__type_info 0000000142207B00 l
+bgs__ClubRecordVeiled__type_info 0000000142207F40 l
+bgs__ClubMsgRange__type_info 0000000142207F70 l
+bgs__ClubStreamMentionVeiled__type_info 0000000142207F98 l
+bgs__protocol__presence__v1__Field__type_info 0000000142208F68 l ; bgs::protocol::presence::v1::Field
+;
+; RTTI type_info: WowConnection event/buffer types
+blz__list_node_WowConnectionSendBuffer_Page__type_info 000000014220B060 l
+TSList_WowConnectionNetEvent__type_info 000000014220B0B0 l ; TSList<WowConnectionNetEvent>
+;
+; RTTI type_info: bgs:: ClubRecord (non-veiled)
+bgs__ClubRecord__type_info 000000014220C120 l
+bgs__ClubRecord__StreamChange__type_info 000000014220C148 l
+bgs__ClubRecord__BanChange__type_info 000000014220C180 l
+bgs__ClubRecord__TicketChange__type_info 000000014220C1B0 l
+bgs__ClubRecord__SuggestionChange__type_info 000000014220C1E8 l
+bgs__ClubRecord__InvitationChange__type_info 000000014220C220 l
+bgs__ClubRecord__MemberChange__type_info 000000014220C258 l
+;
+; RTTI type_info: bgs:: URL/RPC/SSL/network types
+bgs__url__CURLTransferrer__GetProxyUrlThread__type_info 000000014220C800 l
+bgs__ssl__Certificate__type_info 000000014220D930 l
+bgs__rpc__GlobalEvent__type_info 000000014220DA18 l
+bgs__network__NetworkConnection__WriteBlock__type_info 000000014220DC40 l
+;
+; RTTI type_info: bnl:: TLS types
+bnl__TLSNetworkConnection__SendRequest__type_info 000000014220FA18 l
+bnl__TLSNetworkConnection__RecvRequest__type_info 000000014220FA58 l
+;
+; RTTI type_info: WowBGSConnection hash node
+blz__chained_hash_node_WowBGSConnection__type_info 0000000142216030 l
