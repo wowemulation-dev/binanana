@@ -1,0 +1,25 @@
+[tools]
+# Enforces Java 21 for this project
+java = "21"
+
+# Enforce Python 3.13 for Ghidra extension compat
+python = "3.13"
+
+# Python package management
+uv = "latest"
+
+# Ensures the latest Maven is available
+maven = "latest"
+
+# Ensures the latest Gradle is available
+gradle = "latest"
+
+[env]
+# Ghidra installation directory
+GHIDRA_INSTALL_DIR = "/opt/ghidra"
+
+# PyGhidra venv for headless analysis
+PYGHIDRA_PYTHON = "python3.13"
+
+# ghidra-mcp bridge venv
+GHIDRA_MCP_VENV = "{{env.HOME}}/.local/share/ghidra-mcp/.venv"

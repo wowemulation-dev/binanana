@@ -74,7 +74,7 @@ info "Installing system packages"
 
 packages=(java-25-openjdk-devel wget unzip python3.13)
 if [ "$HEADLESS" = false ]; then
-    packages+=(maven python3-pip)
+    packages+=(maven)
 fi
 
 sudo dnf install -y "${packages[@]}"
@@ -162,7 +162,14 @@ if [ -z "$PYGHIDRA_PYTHON" ]; then
     echo "  Install python3.13 and re-run this script." >&2
 else
     info "Using ${PYGHIDRA_PYTHON} for PyGhidra"
-    "$PYGHIDRA_PYTHON" -m pip install --user --no-index -f "$PYGHIDRA_DIST" pyghidra
+    # Use --break-system-packages to handle PEP 668 (externally-managed)
+    # on Fedora 39+. PyGhidra must be in the user site-packages for
+    # both GUI and headless mode to find it.
+    "$PYGHIDRA_PYTHON" -m pip install --user --no-index \
+        --break-system-packages \
+        -f "$PYGHIDRA_DIST" pyghidra 2>/dev/null \
+    || "$PYGHIDRA_PYTHON" -m pip install --user --no-index \
+        -f "$PYGHIDRA_DIST" pyghidra
 fi
 
 # --- Step 7: Build and install binanana extension ---------------------------
@@ -173,17 +180,21 @@ EXTENSION_DIR="$REPO_DIR/extension"
 if [ -d "$EXTENSION_DIR" ] && command -v gradle &>/dev/null; then
     info "Building binanana Ghidra extension"
     export GHIDRA_INSTALL_DIR="$GHIDRA_INSTALL_DIR"
-    (cd "$EXTENSION_DIR" && gradle buildExtension -q)
-
-    # Install to system-wide extensions directory
-    ext_zip=$(ls -t "$EXTENSION_DIR/dist/"*.zip 2>/dev/null | head -1)
-    if [ -n "$ext_zip" ]; then
-        target="$GHIDRA_INSTALL_DIR/Ghidra/Extensions"
-        if [ -d "$target/WowEmulation" ]; then
-            sudo rm -rf "$target/WowEmulation"
+    if (cd "$EXTENSION_DIR" && gradle buildExtension -q); then
+        # Install to system-wide extensions directory
+        ext_zip=$(ls -t "$EXTENSION_DIR/dist/"*.zip 2>/dev/null | head -1)
+        if [ -n "$ext_zip" ]; then
+            target="$GHIDRA_INSTALL_DIR/Ghidra/Extensions"
+            if [ -d "$target/WowEmulation" ]; then
+                sudo rm -rf "$target/WowEmulation"
+            fi
+            sudo unzip -o "$ext_zip" -d "$target" > /dev/null
+            info "binanana extension installed to $target/WowEmulation"
+        else
+            echo "Warning: Extension build produced no zip file." >&2
         fi
-        sudo unzip -o "$ext_zip" -d "$target" > /dev/null
-        info "binanana extension installed to $target/WowEmulation"
+    else
+        echo "Warning: Extension build failed. Run 'make build-extension' to retry." >&2
     fi
 elif [ -d "$EXTENSION_DIR" ]; then
     echo "Warning: gradle not found. binanana extension not built." >&2
@@ -232,28 +243,68 @@ if [ "$HEADLESS" = false ]; then
 
     # Build ghidra-mcp
     info "Building ghidra-mcp"
-    (cd "$mcp_tmpdir/ghidra-mcp" && mvn clean package assembly:single -DskipTests -q)
+    (cd "$mcp_tmpdir/ghidra-mcp" && mvn clean package -DskipTests -q)
 
-    # Deploy extension JAR
-    ext_dir="$HOME/.ghidra/${GHIDRA_DIR_NAME}/Extensions/GhidraMCP/lib"
+    # Deploy extension JAR and metadata
+    ext_base="$HOME/.ghidra/${GHIDRA_DIR_NAME}/Extensions/GhidraMCP"
+    ext_dir="$ext_base/lib"
     mkdir -p "$ext_dir"
 
-    built_jar="$mcp_tmpdir/ghidra-mcp/target/GhidraMCP-${GHIDRA_MCP_VERSION}.jar"
-    if [ ! -f "$built_jar" ]; then
-        error "ghidra-mcp build failed: expected $built_jar"
+    # Find the built JAR (with or without -jar-with-dependencies suffix)
+    built_jar=""
+    for candidate in \
+        "$mcp_tmpdir/ghidra-mcp/target/GhidraMCP-${GHIDRA_MCP_VERSION}.jar" \
+        "$mcp_tmpdir/ghidra-mcp/target/GhidraMCP-${GHIDRA_MCP_VERSION}-jar-with-dependencies.jar"; do
+        if [ -f "$candidate" ]; then
+            built_jar="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$built_jar" ]; then
+        echo "Warning: ghidra-mcp build produced no JAR. Listing target/:" >&2
+        ls "$mcp_tmpdir/ghidra-mcp/target/"*.jar 2>&1 >&2 || true
+        error "ghidra-mcp build failed"
     fi
     cp "$built_jar" "$ext_dir/GhidraMCP.jar"
-    info "GhidraMCP.jar deployed to ${ext_dir}"
 
-    # Install Python bridge dependencies
-    info "Installing ghidra-mcp Python dependencies"
-    pip install --user 'mcp>=1.5.0,<2.0.0' 'requests>=2.28.0,<3.0.0'
+    # Create extension.properties (required for Ghidra to recognize the extension)
+    cat > "$ext_base/extension.properties" <<PROPEOF
+name=GhidraMCP
+description=MCP server plugin for Ghidra. Exposes analysis capabilities via HTTP on port 8089.
+author=bethington
+createdOn=
+version=${GHIDRA_MCP_VERSION}
+PROPEOF
+    touch "$ext_base/Module.manifest"
 
-    # Deploy Python bridge
+    info "GhidraMCP deployed to ${ext_base}"
+
+    # Deploy Python bridge and create venv
     bridge_dir="$HOME/.local/share/ghidra-mcp"
     mkdir -p "$bridge_dir"
     cp "$mcp_tmpdir/ghidra-mcp/bridge_mcp_ghidra.py" "$bridge_dir/bridge_mcp_ghidra.py"
     info "Python bridge deployed to ${bridge_dir}/bridge_mcp_ghidra.py"
+
+    # Create dedicated Python 3.13 venv for the bridge.
+    # Uses the same Python found for PyGhidra (3.13 preferred).
+    info "Creating ghidra-mcp Python venv"
+    bridge_python="${PYGHIDRA_PYTHON:-python3.13}"
+    if ! command -v "$bridge_python" &>/dev/null; then
+        bridge_python="python3"
+    fi
+    "$bridge_python" -m venv "$bridge_dir/.venv"
+    "$bridge_dir/.venv/bin/pip" install --quiet \
+        'mcp>=1.2.0,<2' 'requests>=2,<3'
+    info "ghidra-mcp venv created at ${bridge_dir}/.venv"
+
+    # Verify the bridge can import its dependencies
+    if "$bridge_dir/.venv/bin/python3" -c "from mcp.server.fastmcp import FastMCP; import requests" 2>/dev/null; then
+        info "ghidra-mcp bridge dependencies verified"
+    else
+        echo "Warning: ghidra-mcp bridge dependency check failed." >&2
+        echo "  Try: ${bridge_dir}/.venv/bin/pip install 'mcp>=1.2.0,<2' 'requests>=2,<3'" >&2
+    fi
 fi
 
 # --- Step 9: Summary ---------------------------------------------------------
@@ -263,7 +314,7 @@ echo ""
 echo "  Ghidra version:  ${GHIDRA_VERSION}"
 echo "  Install path:    ${GHIDRA_INSTALL_DIR}"
 echo "  JDK:             $(java -version 2>&1 | head -1)"
-if [ -n "$PYGHIDRA_PYTHON" ]; then
+if [ -n "${PYGHIDRA_PYTHON:-}" ]; then
     echo "  PyGhidra Python: ${PYGHIDRA_PYTHON}"
 fi
 if [ -d "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/WowEmulation" ]; then
@@ -275,7 +326,7 @@ echo "    ghidraRun        - Launch Ghidra GUI"
 echo "    analyzeHeadless  - Run headless analysis (Java/Jython only)"
 echo ""
 echo "  For Python 3 scripts (required for binanana):"
-if [ -n "$PYGHIDRA_PYTHON" ]; then
+if [ -n "${PYGHIDRA_PYTHON:-}" ]; then
     echo "    ${PYGHIDRA_PYTHON} -m pyghidra.ghidra_launch --install-dir ${GHIDRA_INSTALL_DIR} \\"
     echo "      ghidra.app.util.headless.AnalyzeHeadless <project_dir> <project_name> \\"
     echo "      -import <binary> -postScript <script.py>"
@@ -286,12 +337,14 @@ echo ""
 
 if [ "$HEADLESS" = false ]; then
     echo "  ghidra-mcp:      installed (v${GHIDRA_MCP_VERSION})"
-    echo "  Python bridge:   ${HOME}/.local/share/ghidra-mcp/bridge_mcp_ghidra.py"
+    echo "  MCP bridge:      ${HOME}/.local/share/ghidra-mcp/bridge_mcp_ghidra.py"
+    echo "  MCP venv:        ${HOME}/.local/share/ghidra-mcp/.venv/bin/python3"
     echo ""
     echo "  To activate ghidra-mcp:"
     echo "    1. Launch Ghidra: ghidraRun"
-    echo "    2. File > Configure > Miscellaneous"
-    echo "    3. Enable 'GhidraMCPPlugin'"
+    echo "    2. File > Install Extensions"
+    echo "    3. Check 'GhidraMCP', restart Ghidra"
+    echo "    4. The HTTP server starts on http://127.0.0.1:8089/"
     echo ""
 fi
 
