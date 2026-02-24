@@ -49,7 +49,7 @@ The project has three layers:
 
 ## Dependencies
 
-- Python 3.9-3.13 (PyGhidra requires JPype1 which has no 3.14+ wheels)
+- Python 3.13 (PyGhidra requires JPype1 which has no 3.14+ wheels)
 - Ghidra >= 12.0 (for PyGhidra CPython 3 script support)
 - Make
 - Bash shell
@@ -147,7 +147,7 @@ This installs:
 
 - Ghidra 12.0.3 to `/opt/ghidra`
 - JDK 25
-- Python 3.13 (required for PyGhidra; 3.14+ is not supported)
+- Python 3.13 (PyGhidra requires JPype1; 3.14+ is not supported)
 - PyGhidra 3.0.2 + JPype1 (from Ghidra's bundled wheels)
 - ghidra-mcp 2.0.2 (full mode only)
 
@@ -164,7 +164,7 @@ Ghidra has two headless launchers:
 | Launcher | Scripts | Use case |
 |----------|---------|----------|
 | `analyzeHeadless` | Java and Jython (Python 2.7) only | Legacy scripts |
-| PyGhidra headless | CPython 3.9-3.13 | binanana scripts |
+| PyGhidra headless | CPython 3.13 | binanana scripts |
 
 The binanana scripts use Python 3 and must run through PyGhidra.
 
@@ -331,7 +331,7 @@ python3.13 -m pyghidra.ghidra_launch --install-dir /opt/ghidra \
 | 1.14.1 | 41794 | Classic Era | windows-win64 | WowClassic.exe |
 | 1.14.2 | 42597 | Classic Era | windows-win64 | WowClassic.exe |
 | 1.15.2 | 55140 | Classic Era | windows-win64 | WowClassic.exe |
-| 1.15.2 | 55140 | Classic Era | macos-arm64 | World of Warcraft Classic.app |
+| 1.15.2 | 55140 | Classic Era | macos-arm64 | World of Warcraft Classic |
 | 1.15.8 | 64272 | Classic Era | windows-win64 | WowClassic.exe |
 | 2.5.3 | 42328 | TBC Classic | windows-win64 | WowClassic.exe |
 | 3.4.3 | 53788 | Wrath Classic | windows-win64 | WowClassic.exe |
