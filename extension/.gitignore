@@ -1,0 +1,15 @@
+# Gradle build output
+build/
+dist/
+.gradle/
+
+# Python scripts copied from ghidra/ during build
+ghidra_scripts/
+
+# IDE files
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+bin/

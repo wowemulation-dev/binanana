@@ -31,6 +31,7 @@ All Classic clients are 64-bit x86-64 Windows PE binaries with:
   - [Importing symbols](#importing-symbols)
   - [Importing C headers](#importing-c-headers)
   - [Ghidra server](#ghidra-server)
+- [Ghidra extension](#ghidra-extension)
 - [Binary Ninja](#binary-ninja)
 - [Cross-version propagation](#cross-version-propagation)
 - [Available profiles](#available-profiles)
@@ -51,9 +52,10 @@ The project has three layers:
 
 - Python 3.13 (PyGhidra requires JPype1 which has no 3.14+ wheels)
 - Ghidra >= 12.0 (for PyGhidra CPython 3 script support)
+- JDK 21+ (installed by setup-ghidra)
+- Gradle 8.5+ (for building the Ghidra extension)
 - Make
 - Bash shell
-- JDK 21+ (installed by setup-ghidra)
 
 For Binary Ninja workflows:
 
@@ -84,8 +86,15 @@ binanana/
   tools/
     compile_symbols.py       # Merge category .sym files into main.sym
     validate_profile.py      # Check symbol integrity
+  extension/
+    build.gradle             # Gradle build for Ghidra extension
+    extension.properties     # Extension metadata
+    src/main/java/wowemulation/
+      WowBinaryAnalyzer.java # WoW binary detection (auto-analysis)
   script/
     analyze                  # Run Ghidra headless analysis pipeline
+    build-extension          # Build the Ghidra extension zip
+    install-extension        # Build and install extension to Ghidra
     compile-symbols          # Shell wrapper for symbol compilation
     export-from-binja        # Export symbols from Binary Ninja
     setup-ghidra             # Install Ghidra + PyGhidra + ghidra-mcp
@@ -277,6 +286,53 @@ binanana's headless analysis workflow. It is useful if multiple analysts
 need to share a Ghidra project database.
 
 See `/opt/ghidra/server/svrREADME.md` for server setup.
+
+## Ghidra extension
+
+The `extension/` directory contains an installable Ghidra extension
+that bundles both a Java binary detector and the Python analysis
+scripts into a single package.
+
+### What it provides
+
+When installed, the extension adds:
+
+1. **WoW Binary Detector** -- A Java analyzer that runs during
+   Ghidra's auto-analysis. It scans `.rdata` for the `CObject` RTTI
+   signature to identify WoW binaries and sets program properties
+   with the RTTI entry count.
+2. **Script Manager integration** -- All Python scripts from `ghidra/`
+   appear in Script Manager automatically, without manual directory
+   configuration.
+
+The Java code is limited to binary detection (~100 lines). All
+analysis logic (RTTI chain walking, Lua API resolution, symbol
+management) remains in Python.
+
+### Building and installing
+
+Requirements: Gradle 8.5+, JDK 21+, `GHIDRA_INSTALL_DIR` environment
+variable set.
+
+```bash
+# Build the extension zip
+make build-extension
+
+# Build and install to the system Ghidra installation
+make install-extension
+```
+
+The built zip is in `extension/dist/`. It can also be installed via
+Ghidra's `File -> Install Extensions` dialog (green + button).
+
+### Architecture note
+
+Ghidra's auto-analysis extension points (`AbstractAnalyzer`,
+`AbstractProgramWrapperLoader`, `ProgramPlugin`) require Java.
+Ghidra's `ClassSearcher` scans compiled `.class` files on the
+classpath; Python classes created via JPype are not visible to it.
+This is why binary detection uses Java while analysis logic stays
+in Python.
 
 ## Binary Ninja
 

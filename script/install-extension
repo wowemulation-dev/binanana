@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build and install the WoW Emulation Ghidra extension.
+#
+# Builds the extension via Gradle, then extracts it into
+# the system-wide Ghidra extensions directory.
+#
+# Requirements:
+#   - Gradle 8.5+, JDK 21+
+#   - GHIDRA_INSTALL_DIR set (or /opt/ghidra exists)
+#   - Write access to $GHIDRA_INSTALL_DIR/Ghidra/Extensions/
+#     (may require sudo)
+#
+# Usage: ./script/install-extension
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Build first
+"$SCRIPT_DIR/build-extension"
+
+EXTENSION_DIR="$(cd "$SCRIPT_DIR/../extension" && pwd)"
+
+if [ -z "${GHIDRA_INSTALL_DIR:-}" ]; then
+    export GHIDRA_INSTALL_DIR=/opt/ghidra
+fi
+
+INSTALL_TARGET="$GHIDRA_INSTALL_DIR/Ghidra/Extensions"
+
+# Find the built zip
+ZIP_FILE=$(ls -t "$EXTENSION_DIR/dist/"*.zip 2>/dev/null | head -1)
+if [ -z "$ZIP_FILE" ]; then
+    echo "Error: no extension zip found in $EXTENSION_DIR/dist/"
+    exit 1
+fi
+
+echo ""
+echo "Installing: $(basename "$ZIP_FILE")"
+echo "Target: $INSTALL_TARGET"
+
+# Remove any previous installation
+if [ -d "$INSTALL_TARGET/WowEmulation" ]; then
+    echo "Removing previous installation..."
+    sudo rm -rf "$INSTALL_TARGET/WowEmulation"
+fi
+
+# Extract
+sudo unzip -o "$ZIP_FILE" -d "$INSTALL_TARGET" > /dev/null
+
+echo "Installed. Restart Ghidra to activate."

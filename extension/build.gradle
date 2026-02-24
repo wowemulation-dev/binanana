@@ -1,0 +1,54 @@
+// Builds the WoW Emulation Ghidra Extension.
+//
+// Requires GHIDRA_INSTALL_DIR environment variable or Gradle project property:
+//
+//     > export GHIDRA_INSTALL_DIR=/opt/ghidra
+//     > gradle
+//
+//         or
+//
+//     > gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra
+
+//----------------------START "DO NOT MODIFY" SECTION------------------------------
+def ghidraInstallDir
+
+if (System.env.GHIDRA_INSTALL_DIR) {
+	ghidraInstallDir = System.env.GHIDRA_INSTALL_DIR
+}
+else if (project.hasProperty("GHIDRA_INSTALL_DIR")) {
+	ghidraInstallDir = project.getProperty("GHIDRA_INSTALL_DIR")
+}
+else {
+	throw new GradleException("GHIDRA_INSTALL_DIR is not set. " +
+		"Set it via environment variable or -PGHIDRA_INSTALL_DIR=<path>")
+}
+
+task distributeExtension {
+	group = "Ghidra"
+
+	apply from: new File(ghidraInstallDir).getCanonicalPath() + "/support/buildExtension.gradle"
+	dependsOn ':buildExtension'
+}
+//----------------------END "DO NOT MODIFY" SECTION-------------------------------
+
+// Copy Python analysis scripts from ghidra/ into the extension before packaging.
+// The scripts are maintained in the repository root's ghidra/ directory.
+// This task copies them into ghidra_scripts/ so buildExtension includes them.
+task copyScripts(type: Copy) {
+	from "${project.projectDir}/../ghidra"
+	into "${project.projectDir}/ghidra_scripts"
+	include '*.py'
+}
+
+buildExtension.dependsOn copyScripts
+
+// Clean up copied scripts
+clean.doFirst {
+	delete "${project.projectDir}/ghidra_scripts"
+}
+
+repositories {
+}
+
+dependencies {
+}

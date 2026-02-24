@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build the WoW Emulation Ghidra extension.
+#
+# Uses Gradle to compile the Java analyzer, copy Python scripts from
+# ghidra/ into ghidra_scripts/, and package everything into an
+# installable .zip file.
+#
+# Requirements:
+#   - Gradle 8.5+
+#   - JDK 21+
+#   - GHIDRA_INSTALL_DIR set (or /opt/ghidra exists)
+#
+# Usage: ./script/build-extension
+#
+# Output: extension/dist/*.zip
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+EXTENSION_DIR="$REPO_DIR/extension"
+
+# Default GHIDRA_INSTALL_DIR if not set
+if [ -z "${GHIDRA_INSTALL_DIR:-}" ]; then
+    if [ -d /opt/ghidra ]; then
+        export GHIDRA_INSTALL_DIR=/opt/ghidra
+    else
+        echo "Error: GHIDRA_INSTALL_DIR not set and /opt/ghidra not found"
+        exit 1
+    fi
+fi
+
+echo "Building WoW Emulation extension..."
+echo "  Ghidra: $GHIDRA_INSTALL_DIR"
+echo "  Extension: $EXTENSION_DIR"
+
+cd "$EXTENSION_DIR"
+gradle buildExtension
+
+echo ""
+echo "Extension built. Install via:"
+echo "  Ghidra -> File -> Install Extensions -> + button"
+echo "  Select the .zip from: $EXTENSION_DIR/dist/"

@@ -165,7 +165,32 @@ else
     "$PYGHIDRA_PYTHON" -m pip install --user --no-index -f "$PYGHIDRA_DIST" pyghidra
 fi
 
-# --- Step 7: Install ghidra-mcp (full mode only) ----------------------------
+# --- Step 7: Build and install binanana extension ---------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+EXTENSION_DIR="$REPO_DIR/extension"
+
+if [ -d "$EXTENSION_DIR" ] && command -v gradle &>/dev/null; then
+    info "Building binanana Ghidra extension"
+    export GHIDRA_INSTALL_DIR="$GHIDRA_INSTALL_DIR"
+    (cd "$EXTENSION_DIR" && gradle buildExtension -q)
+
+    # Install to system-wide extensions directory
+    ext_zip=$(ls -t "$EXTENSION_DIR/dist/"*.zip 2>/dev/null | head -1)
+    if [ -n "$ext_zip" ]; then
+        target="$GHIDRA_INSTALL_DIR/Ghidra/Extensions"
+        if [ -d "$target/WowEmulation" ]; then
+            sudo rm -rf "$target/WowEmulation"
+        fi
+        sudo unzip -o "$ext_zip" -d "$target" > /dev/null
+        info "binanana extension installed to $target/WowEmulation"
+    fi
+elif [ -d "$EXTENSION_DIR" ]; then
+    echo "Warning: gradle not found. binanana extension not built." >&2
+    echo "  Install Gradle 8.5+ and run: make build-extension" >&2
+fi
+
+# --- Step 8: Install ghidra-mcp (full mode only) ----------------------------
 if [ "$HEADLESS" = false ]; then
     info "Installing ghidra-mcp ${GHIDRA_MCP_VERSION}"
 
@@ -231,7 +256,7 @@ if [ "$HEADLESS" = false ]; then
     info "Python bridge deployed to ${bridge_dir}/bridge_mcp_ghidra.py"
 fi
 
-# --- Step 8: Summary ---------------------------------------------------------
+# --- Step 9: Summary ---------------------------------------------------------
 echo ""
 echo "--- Ghidra Setup Complete ---"
 echo ""
@@ -240,6 +265,9 @@ echo "  Install path:    ${GHIDRA_INSTALL_DIR}"
 echo "  JDK:             $(java -version 2>&1 | head -1)"
 if [ -n "$PYGHIDRA_PYTHON" ]; then
     echo "  PyGhidra Python: ${PYGHIDRA_PYTHON}"
+fi
+if [ -d "$GHIDRA_INSTALL_DIR/Ghidra/Extensions/WowEmulation" ]; then
+    echo "  Extension:       WowEmulation (installed)"
 fi
 echo ""
 echo "  Commands available (in new shell):"
