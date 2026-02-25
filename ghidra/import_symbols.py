@@ -10,6 +10,7 @@
 # @category binanana
 
 from ghidra.program.model.symbol import SourceType
+from ghidra.app.cmd.function import CreateFunctionCmd
 
 functionManager = currentProgram.getFunctionManager()
 symbolTable = currentProgram.getSymbolTable()
@@ -52,7 +53,10 @@ def import_symbols():
     count_label = 0
     count_skip = 0
 
-    input_path = str(file_location.absolutePath) if hasattr(file_location, 'absolutePath') else str(file_location)
+    if hasattr(file_location, 'absolutePath'):
+        input_path = str(file_location.absolutePath)
+    else:
+        input_path = str(file_location)
     with open(input_path, "r") as f:
         for line_num, line in enumerate(f, 1):
             monitor.checkCanceled()
@@ -89,7 +93,8 @@ def import_symbols():
                 # Create or rename function
                 existing = functionManager.getFunctionAt(addr)
                 if existing is not None:
-                    if existing.getSource() != SourceType.DEFAULT:
+                    ex_sym = existing.getSymbol()
+                    if ex_sym is not None and ex_sym.getSource() != SourceType.DEFAULT:
                         count_skip += 1
                         continue
                     existing.setName(name, SourceType.USER_DEFINED)
@@ -105,14 +110,26 @@ def import_symbols():
                     else:
                         body = None
 
-                    try:
-                        functionManager.createFunction(
-                            name, addr, body or addr.getNewAddressSet(),
-                            SourceType.USER_DEFINED)
-                    except Exception as e:
-                        print("Line {}: failed to create function '{}' at {}: {}".format(
-                            line_num, name, addr_str, e))
-                        continue
+                    if body:
+                        try:
+                            functionManager.createFunction(
+                                name, addr, body,
+                                SourceType.USER_DEFINED)
+                        except Exception as e:
+                            print("Line {}: failed to create function '{}' at {}: {}".format(
+                                line_num, name, addr_str, e))
+                            continue
+                    else:
+                        # Force-create: let Ghidra determine boundaries
+                        cmd = CreateFunctionCmd(addr)
+                        cmd.applyTo(currentProgram)
+                        func = functionManager.getFunctionAt(addr)
+                        if func is not None:
+                            func.setName(name, SourceType.USER_DEFINED)
+                        else:
+                            print("Line {}: Ghidra could not create function '{}' at {}".format(
+                                line_num, name, addr_str))
+                            continue
 
                 if comment:
                     func = functionManager.getFunctionAt(addr)

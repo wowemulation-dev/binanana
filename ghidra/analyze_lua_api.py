@@ -5,19 +5,24 @@
 # function pointer table entries.
 #
 # This script:
-# 1. Finds all "Usage: " strings in .rdata
+# 1. Finds all "Usage: " strings in .rdata and .data using the Listing API
 # 2. Scans .text for LEA instructions that reference each string
 # 3. Traces from the LEA to find the associated native function pointer
 # 4. Names the native function based on the Lua API name
+#
+# Uses Ghidra's Listing API to iterate defined data items rather than raw
+# memory.getBytes() scanning. This works on binaries with Arxan protection
+# where .data bytes are zeroed on disk but Ghidra's analyzers have already
+# identified the strings.
 #
 # Usage (GUI): Run from Script Manager, optionally saves results.
 # Usage (headless): -postScript analyze_lua_api.py ["/path/to/output.txt"]
 #
 # @category binanana
 
-import re
-import struct
 from ghidra.program.model.symbol import SourceType
+
+LOG_PREFIX = "[binanana] "
 
 memory = currentProgram.getMemory()
 functionManager = currentProgram.getFunctionManager()
@@ -26,19 +31,6 @@ addressSpace = currentProgram.getAddressFactory().getDefaultAddressSpace()
 listing = currentProgram.getListing()
 
 IMAGE_BASE = currentProgram.getImageBase().getOffset()
-
-
-def read_bytes(addr, size):
-    """Read raw bytes from the binary at an absolute address."""
-    buf = bytearray(size)
-    ghidra_addr = addressSpace.getAddress(addr)
-    memory.getBytes(ghidra_addr, buf)
-    return bytes(buf)
-
-
-def read_uint64(addr):
-    """Read a 64-bit unsigned integer (little-endian)."""
-    return struct.unpack("<Q", read_bytes(addr, 8))[0]
 
 
 def get_section_range(name):
@@ -50,42 +42,84 @@ def get_section_range(name):
     return None, None
 
 
-def find_usage_strings():
-    """Find all 'Usage: ' strings in .rdata."""
-    rdata_start, rdata_end = get_section_range(".rdata")
-    if rdata_start is None:
-        print("ERROR: .rdata section not found")
-        return []
+def read_char_array(data):
+    """Read a char[N] data item as a string using Ghidra's value API.
 
-    entries = []
-    pattern = b"Usage: "
-    addr = rdata_start
+    memory.getBytes() with Python bytearray does not reliably return data
+    in PyGhidra, but data.getValue() works for char[N] types.
+    """
+    try:
+        val = data.getValue()
+        return str(val) if val is not None else None
+    except Exception:
+        return None
 
-    while addr < rdata_end - len(pattern):
-        monitor.checkCanceled()
+
+def get_string_value(data):
+    """Extract a string value from a defined data item.
+
+    Handles multiple Ghidra data type representations:
+      - "string" / "TerminatedCString": data.getValue() returns the string
+      - "char[N]" arrays: read raw bytes
+      - Structures with char[N] components (e.g. TypeDescriptor):
+        dig into components to find embedded string fields
+    Returns the string value or None.
+    """
+    dt = data.getDataType()
+    if dt is None:
+        return None
+    dt_name = dt.getName().lower()
+    if "string" in dt_name:
         try:
-            data = read_bytes(addr, len(pattern))
-            if data == pattern:
-                # Read the full string
-                string_bytes = bytearray()
-                i = 0
-                while True:
-                    b = read_bytes(addr + i, 1)[0]
-                    if b == 0:
-                        break
-                    string_bytes.append(b)
-                    i += 1
-                    if i > 512:
-                        break
-
-                usage_str = string_bytes.decode("ascii", errors="replace")
-                entries.append((addr, usage_str))
-                addr += i + 1
-            else:
-                addr += 1
+            val = data.getValue()
+            return str(val) if val is not None else None
         except Exception:
-            addr += 1
+            return None
+    if dt_name.startswith("char["):
+        return read_char_array(data)
+    num_components = data.getNumComponents()
+    if num_components > 0:
+        for i in range(num_components):
+            component = data.getComponent(i)
+            if component is None:
+                continue
+            comp_dt = component.getDataType()
+            if comp_dt is None:
+                continue
+            comp_name = comp_dt.getName().lower()
+            if comp_name.startswith("char["):
+                val = read_char_array(component)
+                if val:
+                    return val
+            if "string" in comp_name:
+                try:
+                    val = component.getValue()
+                    if val is not None:
+                        return str(val)
+                except Exception:
+                    continue
+    return None
 
+
+def find_usage_strings():
+    """Find all 'Usage: ' strings in .rdata and .data using the Listing API."""
+    entries = []
+    for block in memory.getBlocks():
+        if block.getName() not in (".rdata", ".data"):
+            continue
+        print(LOG_PREFIX + "Scanning {} for Usage: strings...".format(block.getName()))
+        sec_count = 0
+        data_iter = listing.getDefinedData(block.getStart(), True)
+        while data_iter.hasNext():
+            monitor.checkCanceled()
+            data = data_iter.next()
+            if data.getAddress().compareTo(block.getEnd()) > 0:
+                break
+            value = get_string_value(data)
+            if value and value.startswith("Usage: "):
+                entries.append((data.getAddress().getOffset(), value))
+                sec_count += 1
+        print(LOG_PREFIX + "  {} Usage: strings in {}".format(sec_count, block.getName()))
     return entries
 
 
@@ -118,10 +152,6 @@ def find_lea_references(string_addr):
         return []
 
     refs = []
-    # For a RIP-relative LEA, we need:
-    #   effective_addr = lea_addr + 7 + disp32 (typical LEA is 7 bytes)
-    # But instruction length varies. Scan for the displacement value.
-
     # Search for references using Ghidra's reference manager
     ghidra_addr = addressSpace.getAddress(string_addr)
     ref_manager = currentProgram.getReferenceManager()
@@ -141,24 +171,27 @@ def name_function_at(addr, name):
     func = functionManager.getFunctionAt(ghidra_addr)
 
     if func is not None:
-        if func.getSource() == SourceType.DEFAULT:
+        sym = func.getSymbol()
+        if sym is not None and sym.getSource() == SourceType.DEFAULT:
             func.setName(name, SourceType.ANALYSIS)
             return True
     else:
         # Try to find the containing function
         func = functionManager.getFunctionContaining(ghidra_addr)
-        if func and func.getSource() == SourceType.DEFAULT:
-            func.setName(name, SourceType.ANALYSIS)
-            return True
+        if func:
+            sym = func.getSymbol()
+            if sym is not None and sym.getSource() == SourceType.DEFAULT:
+                func.setName(name, SourceType.ANALYSIS)
+                return True
 
     return False
 
 
 def analyze_lua_api():
     """Main analysis: find Usage: strings and resolve to native functions."""
-    print("Scanning for Lua API Usage: strings...")
+    print(LOG_PREFIX + "Scanning for Lua API Usage: strings...")
     usage_entries = find_usage_strings()
-    print("Found {} Usage: strings".format(len(usage_entries)))
+    print(LOG_PREFIX + "Found {} Usage: strings".format(len(usage_entries)))
 
     resolved = 0
     unresolved = []
@@ -182,7 +215,8 @@ def analyze_lua_api():
                 ghidra_ref = addressSpace.getAddress(ref_addr)
                 containing = functionManager.getFunctionContaining(ghidra_ref)
                 if containing:
-                    if containing.getSource() == SourceType.DEFAULT:
+                    c_sym = containing.getSymbol()
+                    if c_sym and c_sym.getSource() == SourceType.DEFAULT:
                         containing.setName(safe_name, SourceType.ANALYSIS)
                         containing.setComment(
                             "Lua API: {}".format(usage_str))
@@ -191,15 +225,16 @@ def analyze_lua_api():
         else:
             unresolved.append((string_addr, func_name))
 
-    print("\nResults:")
-    print("  Usage: strings found: {}".format(len(usage_entries)))
-    print("  Functions resolved: {}".format(resolved))
-    print("  Unresolved: {}".format(len(unresolved)))
+    print(LOG_PREFIX + "")
+    print(LOG_PREFIX + "Results:")
+    print(LOG_PREFIX + "  Usage: strings found: {}".format(len(usage_entries)))
+    print(LOG_PREFIX + "  Functions resolved: {}".format(resolved))
+    print(LOG_PREFIX + "  Unresolved: {}".format(len(unresolved)))
 
     if unresolved:
-        print("\nFirst 20 unresolved:")
+        print(LOG_PREFIX + "First 20 unresolved:")
         for addr, name in unresolved[:20]:
-            print("  {:016X} {}".format(addr, name))
+            print(LOG_PREFIX + "  {:016X} {}".format(addr, name))
 
     # Export results to file
     output_path = None
@@ -223,9 +258,9 @@ def analyze_lua_api():
                 f.write("{:016X} {} {} {}\n".format(
                     string_addr, func_name, params,
                     "resolved" if is_resolved else "unresolved"))
-        print("Results saved to {}".format(str(output_path)))
+        print(LOG_PREFIX + "Results saved to {}".format(str(output_path)))
     else:
-        print("Results not saved to file")
+        print(LOG_PREFIX + "Results not saved to file")
 
 
 analyze_lua_api()

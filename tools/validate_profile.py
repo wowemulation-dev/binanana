@@ -76,7 +76,7 @@ def validate_symbols(profile_dir: Path) -> list[str]:
                         )
                         continue
 
-                    name, addr, kind = parts[0], parts[1], parts[2]
+                    _, addr, kind = parts[0], parts[1], parts[2]
 
                     # Validate address is hex
                     try:

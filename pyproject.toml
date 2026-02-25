@@ -1,0 +1,32 @@
+[project]
+name = "binanana"
+version = "0.1.0"
+description = "Reverse engineering toolkit for WoW binaries"
+requires-python = ">=3.9"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15",
+    "pyright>=1.1",
+]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 99
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+# Ghidra scripts use runtime-injected builtins
+# (currentProgram, monitor, getScriptArgs, askFile, ghidra.*)
+"ghidra/*.py" = ["F821"]
+
+[tool.pyright]
+pythonVersion = "3.9"
+# Ghidra scripts import from ghidra.* which is only available at runtime
+reportMissingImports = false
+reportMissingModuleSource = false
+# The ghidra/ scripts use runtime-injected globals
+reportUndefinedVariable = false
+include = ["ghidra", "tools"]

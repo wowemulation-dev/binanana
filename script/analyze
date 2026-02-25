@@ -2,39 +2,64 @@
 
 # Run Ghidra headless analysis pipeline on a binary.
 #
-# Usage: ./script/analyze <binary-path> <profile-dir>
+# Usage: ./script/analyze <binary-path> <profile-dir> [--reuse]
 #
 # Runs the binanana Ghidra scripts via PyGhidra headless mode:
-#   1. analyze_rtti.py    -- Walk RTTI type_info -> COL -> vtable chains
-#   2. analyze_lua_api.py -- Resolve Lua API Usage: strings
-#   3. analyze_strings.py -- Extract source paths and debug strings
-#   4. export_symbols.py  -- Export all named symbols to .sym format
+#   1. analyze_rtti.py       -- Walk RTTI type_info -> COL -> vtable chains
+#   2. analyze_vtables.py    -- Heuristic vtable scan (catches non-RTTI vtables)
+#   3. analyze_lua_api.py    -- Resolve Lua API Usage: strings via xrefs
+#   4. analyze_lua_tables.py -- Structural luaL_Reg table scan (bypasses xrefs)
+#   5. analyze_lea_refs.py   -- LEA operand scan for string-to-code mapping
+#   6. analyze_strings.py    -- Extract source paths and debug strings
+#   7. export_symbols.py     -- Export all named symbols to .sym format
 #
-# Creates a temporary Ghidra project directory that is cleaned up on exit.
+# Options:
+#   --reuse  Keep the Ghidra project database in the profile directory.
+#            First run imports and analyzes (slow). Subsequent runs reuse
+#            the existing database and only re-run post-scripts (fast).
+#            Without this flag, a temporary project is created and deleted.
+#
 # Requires PyGhidra (run `make setup-ghidra-headless` first).
 
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 <binary-path> <profile-dir>" >&2
+    echo "Usage: $0 <binary-path> <profile-dir> [--reuse]" >&2
     echo "" >&2
     echo "  binary-path  Path to the PE binary to analyze" >&2
     echo "  profile-dir  binanana profile directory for output" >&2
+    echo "  --reuse      Keep Ghidra project for faster re-runs" >&2
     exit 1
 fi
 
 BINARY_PATH="$1"
 PROFILE_DIR="$2"
+REUSE_PROJECT=false
+
+# Parse optional flags
+shift 2
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --reuse) REUSE_PROJECT=true ;;
+        *) echo "Unknown option: $1" >&2; exit 1 ;;
+    esac
+    shift
+done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GHIDRA_SCRIPTS="$REPO_DIR/ghidra"
 GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"
 
-# Create a temporary project directory, cleaned up on exit
-PROJECT_DIR="$(mktemp -d "${TMPDIR:-/var/tmp}/binanana-ghidra.XXXXXXXXXX")"
-cleanup() { rm -rf "$PROJECT_DIR"; }
-trap cleanup EXIT
+# Determine project directory
+if [ "$REUSE_PROJECT" = true ]; then
+    PROJECT_DIR="$PROFILE_DIR/ghidra_project"
+    mkdir -p "$PROJECT_DIR"
+else
+    PROJECT_DIR="$(mktemp -d "${TMPDIR:-/var/tmp}/binanana-ghidra.XXXXXXXXXX")"
+    cleanup() { rm -rf "$PROJECT_DIR"; }
+    trap cleanup EXIT
+fi
 
 # Find PyGhidra-compatible Python
 PYTHON=""
@@ -72,26 +97,80 @@ PROJECT_NAME="binanana_$(basename "$PROFILE_DIR")"
 OUTPUT_DIR="$PROFILE_DIR/ghidra_output"
 mkdir -p "$OUTPUT_DIR"
 
+PYGHIDRA_CMD="$PYTHON -m pyghidra.ghidra_launch --install-dir $GHIDRA_INSTALL_DIR ghidra.app.util.headless.AnalyzeHeadless"
+
+# Build the post-script arguments (shared between import and process modes)
+POST_SCRIPTS=(
+    -postScript "$GHIDRA_SCRIPTS/analyze_rtti.py" "$OUTPUT_DIR/rtti.txt"
+    -postScript "$GHIDRA_SCRIPTS/analyze_vtables.py" "$OUTPUT_DIR/vtables.txt"
+    -postScript "$GHIDRA_SCRIPTS/analyze_lua_api.py" "$OUTPUT_DIR/lua_api.txt"
+    -postScript "$GHIDRA_SCRIPTS/analyze_lua_tables.py" "$OUTPUT_DIR/lua_tables.txt"
+    -postScript "$GHIDRA_SCRIPTS/analyze_lea_refs.py" "$OUTPUT_DIR/lea_refs.txt"
+    -postScript "$GHIDRA_SCRIPTS/analyze_strings.py" "$OUTPUT_DIR/strings.txt"
+    -postScript "$GHIDRA_SCRIPTS/export_symbols.py" "$OUTPUT_DIR/symbols.sym"
+)
+
+# Check if we can reuse an existing project
+EXISTING_PROJECT=false
+if [ "$REUSE_PROJECT" = true ]; then
+    # Ghidra creates .gpr and .rep files/dirs in the project directory
+    if ls "$PROJECT_DIR"/"$PROJECT_NAME".gpr 1>/dev/null 2>&1; then
+        EXISTING_PROJECT=true
+    fi
+fi
+
 echo "=== binanana Ghidra Analysis Pipeline ==="
 echo "Binary:  $BINARY_PATH"
 echo "Profile: $PROFILE_DIR"
 echo "Arch:    $ARCH"
 echo "Python:  $PYTHON"
-echo "Project: $PROJECT_DIR (temporary)"
-echo ""
 
-PYGHIDRA_CMD="$PYTHON -m pyghidra.ghidra_launch --install-dir $GHIDRA_INSTALL_DIR ghidra.app.util.headless.AnalyzeHeadless"
+if [ "$EXISTING_PROJECT" = true ]; then
+    # Discover the program name inside the Ghidra project.
+    # The index file maps internal IDs to the imported binary filename.
+    INDEX_FILE="$PROJECT_DIR/${PROJECT_NAME}.rep/idata/~index.dat"
+    PROGRAM_NAME=""
+    if [ -f "$INDEX_FILE" ]; then
+        # Format: "  00000000:Wow.exe:c0a81859fd180579146656699"
+        PROGRAM_NAME=$(grep -oP '^\s+\w+:\K[^:]+' "$INDEX_FILE" | head -1)
+    fi
+    if [ -z "$PROGRAM_NAME" ]; then
+        echo "Error: Could not determine program name in Ghidra project." >&2
+        echo "Delete $PROJECT_DIR and re-run without --reuse first." >&2
+        exit 1
+    fi
 
-# Run analysis with all scripts
-echo "Starting headless analysis (this takes several minutes)..."
-$PYGHIDRA_CMD "$PROJECT_DIR" "$PROJECT_NAME" \
-    -import "$BINARY_PATH" \
-    -processor "$ARCH" \
-    -postScript "$GHIDRA_SCRIPTS/analyze_rtti.py" "$OUTPUT_DIR/rtti.txt" \
-    -postScript "$GHIDRA_SCRIPTS/analyze_lua_api.py" "$OUTPUT_DIR/lua_api.txt" \
-    -postScript "$GHIDRA_SCRIPTS/analyze_strings.py" "$OUTPUT_DIR/strings.txt" \
-    -postScript "$GHIDRA_SCRIPTS/export_symbols.py" "$OUTPUT_DIR/symbols.sym" \
-    -overwrite
+    echo "Project: $PROJECT_DIR (reusing existing database)"
+    echo "Program: $PROGRAM_NAME"
+    echo "Mode:    process (scripts only, no re-analysis)"
+    echo ""
+    echo "Re-running post-scripts on existing database..."
+    $PYGHIDRA_CMD "$PROJECT_DIR" "$PROJECT_NAME" \
+        -process "$PROGRAM_NAME" \
+        -noanalysis \
+        -scriptPath "$GHIDRA_SCRIPTS" \
+        "${POST_SCRIPTS[@]}"
+elif [ "$REUSE_PROJECT" = true ]; then
+    echo "Project: $PROJECT_DIR (persistent, first run)"
+    echo "Mode:    import + analyze + scripts"
+    echo ""
+    echo "Starting headless analysis (this takes several minutes)..."
+    $PYGHIDRA_CMD "$PROJECT_DIR" "$PROJECT_NAME" \
+        -import "$BINARY_PATH" \
+        -processor "$ARCH" \
+        "${POST_SCRIPTS[@]}" \
+        -overwrite
+else
+    echo "Project: $PROJECT_DIR (temporary)"
+    echo "Mode:    import + analyze + scripts"
+    echo ""
+    echo "Starting headless analysis (this takes several minutes)..."
+    $PYGHIDRA_CMD "$PROJECT_DIR" "$PROJECT_NAME" \
+        -import "$BINARY_PATH" \
+        -processor "$ARCH" \
+        "${POST_SCRIPTS[@]}" \
+        -overwrite
+fi
 
 echo ""
 echo "=== Analysis Complete ==="

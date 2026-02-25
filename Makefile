@@ -56,4 +56,11 @@ install-extension:
 clean-extension:
 	cd extension && gradle clean 2>/dev/null; rm -rf extension/dist/
 
-.PHONY: all compile-symbols compile-symbols-one validate validate-all clean export-from-binja analyze setup-ghidra setup-ghidra-headless build-extension install-extension clean-extension
+lint:
+	uv run ruff check ghidra/ tools/
+	uv run pyright ghidra/ tools/
+
+lint-fix:
+	uv run ruff check --fix ghidra/ tools/
+
+.PHONY: all compile-symbols compile-symbols-one validate validate-all clean export-from-binja analyze setup-ghidra setup-ghidra-headless build-extension install-extension clean-extension lint lint-fix

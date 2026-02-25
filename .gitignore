@@ -14,6 +14,8 @@ venv/
 *.rep/
 *.gpr
 *.lock
+ghidra_project/
+ghidra_output/
 
 # Binary Ninja
 *.bndb

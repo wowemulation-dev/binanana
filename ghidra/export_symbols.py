@@ -88,7 +88,10 @@ def export_data_labels(f_out):
     return count
 
 
-output_path = str(file_location.absolutePath) if hasattr(file_location, 'absolutePath') else str(file_location)
+if hasattr(file_location, 'absolutePath'):
+    output_path = str(file_location.absolutePath)
+else:
+    output_path = str(file_location)
 with open(output_path, "w") as f_out:
     func_count = export_function_symbols(f_out)
     label_count = export_data_labels(f_out)

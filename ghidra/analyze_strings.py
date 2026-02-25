@@ -4,103 +4,125 @@
 # in assertion and logging code. This script extracts and categorizes
 # them.
 #
+# Uses Ghidra's Listing API to iterate over already-defined string
+# data items rather than raw memory scanning. This handles Arxan-
+# protected binaries where .data bytes are zeroed on disk but
+# Ghidra's analyzers have identified strings at the data-type level.
+#
 # Categories extracted:
 # - Source file paths (.cpp, .h)
-# - ERROR_ enum strings
 # - CG*Data update field names
 # - JamJSON type names
 # - CVar registration strings
-# - Assert/debug format strings
 #
 # Usage (GUI): Run from Script Manager, optionally saves results.
 # Usage (headless): -postScript analyze_strings.py ["/path/to/output.txt"]
 #
 # @category binanana
 
-import struct
-from ghidra.program.model.symbol import SourceType
+
+LOG_PREFIX = "[binanana] "
 
 memory = currentProgram.getMemory()
-addressSpace = currentProgram.getAddressFactory().getDefaultAddressSpace()
+listing = currentProgram.getListing()
 
 
-def read_bytes(addr, size):
-    """Read raw bytes from the binary."""
-    buf = bytearray(size)
-    ghidra_addr = addressSpace.getAddress(addr)
-    memory.getBytes(ghidra_addr, buf)
-    return bytes(buf)
+def read_char_array(data):
+    """Read a char[N] data item as a string using Ghidra's value API.
+
+    memory.getBytes() with Python bytearray does not reliably return data
+    in PyGhidra, but data.getValue() works for char[N] types.
+    """
+    try:
+        val = data.getValue()
+        return str(val) if val is not None else None
+    except Exception:
+        return None
 
 
-def get_section_range(name):
-    """Find a section's boundaries."""
-    for block in memory.getBlocks():
-        if block.getName() == name:
-            return (block.getStart().getOffset(),
-                    block.getEnd().getOffset())
-    return None, None
+def get_string_value(data):
+    """Extract a string value from a defined data item.
 
-
-def read_string_at(addr, max_len=512):
-    """Read a null-terminated ASCII string."""
-    result = bytearray()
-    for i in range(max_len):
+    Handles multiple Ghidra data type representations:
+      - "string" / "TerminatedCString": data.getValue() returns the string
+      - "char[N]" arrays: read raw bytes
+      - Structures with char[N] components (e.g. TypeDescriptor):
+        dig into components to find embedded string fields
+    Returns the string value or None.
+    """
+    dt = data.getDataType()
+    if dt is None:
+        return None
+    dt_name = dt.getName().lower()
+    if "string" in dt_name:
         try:
-            b = read_bytes(addr + i, 1)[0]
+            val = data.getValue()
+            return str(val) if val is not None else None
         except Exception:
-            break
-        if b == 0:
-            break
-        if b < 0x20 or b > 0x7E:
-            break
-        result.append(b)
-    return result.decode("ascii", errors="replace") if result else None
-
-
-def scan_strings(rdata_start, rdata_end, prefix):
-    """Find all strings in .rdata starting with the given prefix."""
-    results = []
-    prefix_bytes = prefix.encode("ascii")
-    addr = rdata_start
-
-    while addr < rdata_end - len(prefix_bytes):
-        monitor.checkCanceled()
-        try:
-            data = read_bytes(addr, len(prefix_bytes))
-            if data == prefix_bytes:
-                full_string = read_string_at(addr)
-                if full_string:
-                    results.append((addr, full_string))
-                    addr += len(full_string) + 1
+            return None
+    if dt_name.startswith("char["):
+        return read_char_array(data)
+    num_components = data.getNumComponents()
+    if num_components > 0:
+        for i in range(num_components):
+            component = data.getComponent(i)
+            if component is None:
+                continue
+            comp_dt = component.getDataType()
+            if comp_dt is None:
+                continue
+            comp_name = comp_dt.getName().lower()
+            if comp_name.startswith("char["):
+                val = read_char_array(component)
+                if val:
+                    return val
+            if "string" in comp_name:
+                try:
+                    val = component.getValue()
+                    if val is not None:
+                        return str(val)
+                except Exception:
                     continue
-        except Exception:
-            pass
-        addr += 1
+    return None
 
+
+def find_strings_with_prefixes(prefixes):
+    """Find all defined strings matching any prefix in .rdata and .data."""
+    results = []
+    for block in memory.getBlocks():
+        if block.getName() not in (".rdata", ".data"):
+            continue
+        print(LOG_PREFIX + "Scanning {} ({:016X} - {:016X}, {:.1f} MB)...".format(
+            block.getName(),
+            block.getStart().getOffset(),
+            block.getEnd().getOffset(),
+            (block.getEnd().getOffset() - block.getStart().getOffset()) / 1024 / 1024))
+        data_iter = listing.getDefinedData(block.getStart(), True)
+        while data_iter.hasNext():
+            monitor.checkCanceled()
+            data = data_iter.next()
+            if data.getAddress().compareTo(block.getEnd()) > 0:
+                break
+            value = get_string_value(data)
+            if not value:
+                continue
+            for prefix in prefixes:
+                if value.startswith(prefix):
+                    results.append((data.getAddress().getOffset(), value))
+                    break
     return results
 
 
 def analyze_strings():
     """Main analysis: extract and categorize embedded strings."""
-    rdata_start, rdata_end = get_section_range(".rdata")
-    if rdata_start is None:
-        print("ERROR: .rdata section not found")
-        return
-
-    print("Scanning .rdata ({:016X} - {:016X}, {:.1f} MB)...".format(
-        rdata_start, rdata_end, (rdata_end - rdata_start) / 1024 / 1024))
-
     # Source file paths
-    print("\nScanning for source file paths...")
-    # Try common build path prefixes
-    prefixes = [
+    print(LOG_PREFIX + "Scanning for source file paths...")
+    source_prefixes = [
         "D:\\BuildServer\\",
         "d:\\buildserver\\",
         "D:\\buildserver\\",
     ]
-    source_paths = []
-    for prefix in prefixes:
-        source_paths.extend(scan_strings(rdata_start, rdata_end, prefix))
+    source_paths = find_strings_with_prefixes(source_prefixes)
     # Deduplicate
     seen = set()
     unique_paths = []
@@ -109,41 +131,43 @@ def analyze_strings():
             seen.add(s)
             unique_paths.append((addr, s))
     source_paths = unique_paths
-    print("  Found {} source file paths".format(len(source_paths)))
+    print(LOG_PREFIX + "  Found {} source file paths".format(len(source_paths)))
 
     # Categorize by extension
     cpp_files = [(a, s) for a, s in source_paths if s.lower().endswith(".cpp")]
     h_files = [(a, s) for a, s in source_paths if s.lower().endswith(".h")]
     cc_files = [(a, s) for a, s in source_paths if s.lower().endswith(".cc")]
-    print("    .cpp: {}, .h: {}, .cc: {}".format(
+    print(LOG_PREFIX + "    .cpp: {}, .h: {}, .cc: {}".format(
         len(cpp_files), len(h_files), len(cc_files)))
 
     # CG*Data update field strings
-    print("\nScanning for update field names...")
-    update_fields = []
-    for prefix in ["CGUnitData", "CGPlayerData", "CGActivePlayerData",
-                    "CGItemData", "CGGameObjectData", "CGObjectData",
-                    "CGContainerData", "CGCorpseData", "CGDynamicObjectData",
-                    "CGAreaTriggerData"]:
-        update_fields.extend(scan_strings(rdata_start, rdata_end, prefix))
-    print("  Found {} update field names".format(len(update_fields)))
+    print(LOG_PREFIX + "Scanning for update field names...")
+    update_field_prefixes = [
+        "CGUnitData", "CGPlayerData", "CGActivePlayerData",
+        "CGItemData", "CGGameObjectData", "CGObjectData",
+        "CGContainerData", "CGCorpseData", "CGDynamicObjectData",
+        "CGAreaTriggerData",
+    ]
+    update_fields = find_strings_with_prefixes(update_field_prefixes)
+    print(LOG_PREFIX + "  Found {} update field names".format(len(update_fields)))
 
     # JamJSON type names
-    print("\nScanning for JamJSON types...")
-    jam_types = scan_strings(rdata_start, rdata_end, "JamJSON")
-    print("  Found {} JamJSON types".format(len(jam_types)))
+    print(LOG_PREFIX + "Scanning for JamJSON types...")
+    jam_types = find_strings_with_prefixes(["JamJSON"])
+    print(LOG_PREFIX + "  Found {} JamJSON types".format(len(jam_types)))
 
-    # CVar strings (look for "CVar" references)
-    print("\nScanning for CVar references...")
-    cvar_refs = scan_strings(rdata_start, rdata_end, "CVar ")
-    print("  Found {} CVar references".format(len(cvar_refs)))
+    # CVar strings
+    print(LOG_PREFIX + "Scanning for CVar references...")
+    cvar_refs = find_strings_with_prefixes(["CVar "])
+    print(LOG_PREFIX + "  Found {} CVar references".format(len(cvar_refs)))
 
     # Summary
-    print("\n=== Summary ===")
-    print("Source file paths: {}".format(len(source_paths)))
-    print("Update field names: {}".format(len(update_fields)))
-    print("JamJSON types: {}".format(len(jam_types)))
-    print("CVar references: {}".format(len(cvar_refs)))
+    print(LOG_PREFIX + "")
+    print(LOG_PREFIX + "=== Summary ===")
+    print(LOG_PREFIX + "Source file paths: {}".format(len(source_paths)))
+    print(LOG_PREFIX + "Update field names: {}".format(len(update_fields)))
+    print(LOG_PREFIX + "JamJSON types: {}".format(len(jam_types)))
+    print(LOG_PREFIX + "CVar references: {}".format(len(cvar_refs)))
 
     # Export results to file
     output_path = None
@@ -178,9 +202,9 @@ def analyze_strings():
             for addr, s in cvar_refs:
                 f.write("{:016X} {}\n".format(addr, s))
 
-        print("\nResults saved to {}".format(str(output_path)))
+        print(LOG_PREFIX + "Results saved to {}".format(str(output_path)))
     else:
-        print("Results not saved to file")
+        print(LOG_PREFIX + "Results not saved to file")
 
 
 analyze_strings()

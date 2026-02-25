@@ -2,7 +2,6 @@
 """Compile symbol files from category directories into a single main.sym."""
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
