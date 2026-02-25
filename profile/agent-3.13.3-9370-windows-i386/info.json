@@ -3,7 +3,7 @@
   "arch": "i386",
   "module_name": "Agent.exe",
   "module_base": "400000",
-  "function_count": 7773,
+  "function_count": 8484,
   "version": "3.13.3",
   "build": 9370,
   "product": "bna",
