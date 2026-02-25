@@ -56,11 +56,24 @@ install-extension:
 clean-extension:
 	cd extension && gradle clean 2>/dev/null; rm -rf extension/dist/
 
+build-dumper:
+	cd tools/wow-dumper && cargo xwin build --target x86_64-pc-windows-msvc --release
+
+check-dumper:
+	cd tools/wow-dumper && cargo xwin check --target x86_64-pc-windows-msvc
+
+dump-client:
+	@if [ -z "$(CLIENT)" ]; then \
+		echo "Usage: make dump-client CLIENT=/path/to/WowClassic.exe [OUTPUT=/path/to/output.exe]"; \
+		exit 1; \
+	fi
+	./script/dump-client "$(CLIENT)" $(OUTPUT)
+
 lint:
-	uv run ruff check ghidra/ tools/
-	uv run pyright ghidra/ tools/
+	uv run ruff check ghidra/ tools/*.py
+	uv run pyright ghidra/ tools/*.py
 
 lint-fix:
-	uv run ruff check --fix ghidra/ tools/
+	uv run ruff check --fix ghidra/ tools/*.py
 
-.PHONY: all compile-symbols compile-symbols-one validate validate-all clean export-from-binja analyze setup-ghidra setup-ghidra-headless build-extension install-extension clean-extension lint lint-fix
+.PHONY: all compile-symbols compile-symbols-one validate validate-all clean export-from-binja analyze setup-ghidra setup-ghidra-headless build-extension install-extension clean-extension build-dumper check-dumper dump-client lint lint-fix

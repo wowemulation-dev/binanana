@@ -33,5 +33,8 @@ Thumbs.db
 # Generated files
 profile/*/symbol/main.sym
 
+# Rust
+target/
+
 # Serena
 .serena/

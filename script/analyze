@@ -14,6 +14,9 @@
 #   7. export_symbols.py     -- Export all named symbols to .sym format
 #
 # Options:
+#   --dump   Run dump-client first to unpack Arxan-protected binaries.
+#            Creates a .dump.exe file next to the original and analyzes that.
+#            Requires Wine and the wow-dumper tool to be built.
 #   --reuse  Keep the Ghidra project database in the profile directory.
 #            First run imports and analyzes (slow). Subsequent runs reuse
 #            the existing database and only re-run post-scripts (fast).
@@ -24,22 +27,25 @@
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-    echo "Usage: $0 <binary-path> <profile-dir> [--reuse]" >&2
+    echo "Usage: $0 <binary-path> <profile-dir> [--dump] [--reuse]" >&2
     echo "" >&2
     echo "  binary-path  Path to the PE binary to analyze" >&2
     echo "  profile-dir  binanana profile directory for output" >&2
+    echo "  --dump       Run dump-client first to unpack Arxan protection" >&2
     echo "  --reuse      Keep Ghidra project for faster re-runs" >&2
     exit 1
 fi
 
 BINARY_PATH="$1"
 PROFILE_DIR="$2"
+DUMP_FIRST=false
 REUSE_PROJECT=false
 
 # Parse optional flags
 shift 2
 while [ $# -gt 0 ]; do
     case "$1" in
+        --dump) DUMP_FIRST=true ;;
         --reuse) REUSE_PROJECT=true ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
@@ -47,6 +53,15 @@ while [ $# -gt 0 ]; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Run dump-client first if requested
+if [ "$DUMP_FIRST" = true ]; then
+    echo "Running dump-client to unpack Arxan protection..."
+    "$SCRIPT_DIR/dump-client" "$BINARY_PATH"
+    BINARY_PATH="${BINARY_PATH%.exe}.dump.exe"
+    echo "Analyzing dumped binary: $BINARY_PATH"
+fi
+
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GHIDRA_SCRIPTS="$REPO_DIR/ghidra"
 GHIDRA_INSTALL_DIR="${GHIDRA_INSTALL_DIR:-/opt/ghidra}"

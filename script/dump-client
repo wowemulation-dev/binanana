@@ -1,0 +1,100 @@
+#!/bin/bash
+# Dump an Arxan-protected WoW client binary using Wine.
+#
+# Creates a temporary Wine prefix, runs wow-dumper.exe against the
+# client binary, and writes the decrypted dump to the output path.
+#
+# Usage:
+#   ./script/dump-client <client-exe> [output-path]
+#
+# Example:
+#   ./script/dump-client ~/Downloads/wow_classic/classic-1.13.2/WowClassic.exe
+#   ./script/dump-client ~/Downloads/wow_classic/classic-1.13.2/WowClassic.exe /tmp/WowClassic.dump.exe
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+
+DUMPER_EXE="$REPO_DIR/tools/wow-dumper/target/x86_64-pc-windows-msvc/release/wow-dumper.exe"
+
+usage() {
+    echo "Usage: $0 <client-exe> [output-path]" >&2
+    echo "" >&2
+    echo "Dumps an Arxan-protected WoW binary using Wine." >&2
+    echo "" >&2
+    echo "Arguments:" >&2
+    echo "  client-exe    Path to the WoW executable" >&2
+    echo "  output-path   Output path (default: <client>.dump.exe)" >&2
+    exit 1
+}
+
+if [ $# -lt 1 ]; then
+    usage
+fi
+
+CLIENT_EXE="$1"
+if [ ! -f "$CLIENT_EXE" ]; then
+    echo "Error: File not found: $CLIENT_EXE" >&2
+    exit 1
+fi
+
+# Resolve to absolute path
+CLIENT_EXE="$(realpath "$CLIENT_EXE")"
+
+# Default output path: same directory, .dump.exe suffix
+if [ $# -ge 2 ]; then
+    OUTPUT="$(realpath -m "$2")"
+else
+    BASENAME="$(basename "${CLIENT_EXE%.exe}")"
+    OUTPUT="$(dirname "$CLIENT_EXE")/${BASENAME}.dump.exe"
+fi
+
+# Check for the dumper binary
+if [ ! -f "$DUMPER_EXE" ]; then
+    echo "Error: wow-dumper.exe not found at $DUMPER_EXE" >&2
+    echo "Build it first: make build-dumper" >&2
+    exit 1
+fi
+
+# Check for wine
+if ! command -v wine &>/dev/null; then
+    echo "Error: wine not found in PATH" >&2
+    exit 1
+fi
+
+# Create a temporary Wine prefix
+WINEPREFIX="$(mktemp -d /tmp/wow-dumper.XXXXXX)"
+export WINEPREFIX
+
+cleanup() {
+    if [ -d "$WINEPREFIX" ]; then
+        rm -rf "$WINEPREFIX"
+    fi
+}
+trap cleanup EXIT
+
+echo "[dump-client] Creating Wine prefix at $WINEPREFIX..."
+WINEARCH=win64 wineboot --init 2>/dev/null
+
+# Convert Linux paths to Wine Z: drive paths
+WINE_CLIENT="Z:$(echo "$CLIENT_EXE" | sed 's|/|\\|g')"
+WINE_OUTPUT="Z:$(echo "$OUTPUT" | sed 's|/|\\|g')"
+WINE_DUMPER="Z:$(echo "$DUMPER_EXE" | sed 's|/|\\|g')"
+
+echo "[dump-client] Dumping: $CLIENT_EXE"
+echo "[dump-client] Output:  $OUTPUT"
+
+# Run the dumper under Wine
+wine "$DUMPER_EXE" "$WINE_CLIENT" \
+    --output "$WINE_OUTPUT" \
+    --verbose \
+    --timeout 60
+
+if [ -f "$OUTPUT" ]; then
+    SIZE=$(stat -c%s "$OUTPUT")
+    echo "[dump-client] Done: $OUTPUT ($SIZE bytes)"
+else
+    echo "Error: Dump file was not created" >&2
+    exit 1
+fi

@@ -45,8 +45,8 @@ The project has three layers:
 2. **Ghidra scripts** -- Python scripts for automated analysis: RTTI
    chain walking, Lua API string resolution, symbol export/import,
    cross-version function matching.
-3. **Tools** -- Python CLI for compiling symbols, validating profiles,
-   and generating tool-specific output formats.
+3. **Tools** -- CLI utilities for compiling symbols, validating profiles,
+   and dumping Arxan-protected binaries from memory.
 
 ## Dependencies
 
@@ -60,6 +60,12 @@ The project has three layers:
 For Binary Ninja workflows:
 
 - Binary Ninja with binary_ninja_mcp plugin
+
+For the memory dumper (`tools/wow-dumper`):
+
+- Rust 1.92+ with `x86_64-pc-windows-msvc` target
+- cargo-xwin (cross-compilation from Linux)
+- Wine 9+ (wine-staging recommended)
 
 ## Project structure
 
@@ -77,15 +83,19 @@ binanana/
         main.h               # Master header
         {subsystem}/*.h      # Per-subsystem C headers
   ghidra/
+    analyze_rtti.py          # Batch RTTI chain walker
+    analyze_vtables.py       # Heuristic vtable scanner
+    analyze_lua_api.py       # Lua API Usage: string resolver
+    analyze_lua_tables.py    # luaL_Reg registration table scanner
+    analyze_lea_refs.py      # LEA instruction reference scanner
+    analyze_strings.py       # Source path and debug string extractor
     export_symbols.py        # Export named symbols from Ghidra
     import_symbols.py        # Import symbols into Ghidra
-    analyze_rtti.py          # Batch RTTI chain walker
-    analyze_lua_api.py       # Lua API Usage: string resolver
-    analyze_strings.py       # Source path and debug string extractor
     propagate_symbols.py     # Cross-version function hash matching
   tools/
     compile_symbols.py       # Merge category .sym files into main.sym
     validate_profile.py      # Check symbol integrity
+    wow-dumper/              # Rust tool: dump Arxan-protected binaries
   extension/
     build.gradle             # Gradle build for Ghidra extension
     settings.gradle          # Project name (WowEmulation)
@@ -96,9 +106,10 @@ binanana/
   script/
     analyze                  # Run Ghidra headless analysis pipeline
     build-extension          # Build the Ghidra extension zip
-    install-extension        # Build and install extension to Ghidra
     compile-symbols          # Shell wrapper for symbol compilation
+    dump-client              # Dump Arxan-protected binary via Wine
     export-from-binja        # Export symbols from Binary Ninja
+    install-extension        # Build and install extension to Ghidra
     setup-ghidra             # Install Ghidra + PyGhidra + ghidra-mcp
   Makefile
 ```
@@ -195,13 +206,16 @@ Example:
 The script creates a temporary Ghidra project directory that is
 automatically cleaned up on exit.
 
-This executes four post-scripts:
+This executes seven post-scripts:
 
 1. `analyze_rtti.py` -- Walk RTTI type_info -> COL -> vtable chains
-2. `analyze_lua_api.py` -- Resolve Lua API Usage: strings to native
+2. `analyze_vtables.py` -- Heuristic vtable scanner for data sections
+3. `analyze_lua_api.py` -- Resolve Lua API Usage: strings to native
    functions
-3. `analyze_strings.py` -- Extract source paths and debug strings
-4. `export_symbols.py` -- Export all named symbols to .sym format
+4. `analyze_lua_tables.py` -- Find luaL_Reg registration tables
+5. `analyze_lea_refs.py` -- Scan LEA instructions for string references
+6. `analyze_strings.py` -- Extract source paths and debug strings
+7. `export_symbols.py` -- Export all named symbols to .sym format
 
 To run individual scripts:
 

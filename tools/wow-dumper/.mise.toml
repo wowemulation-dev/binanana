@@ -1,0 +1,9 @@
+# mise configuration for wow-dumper
+# https://mise.jdx.dev/configuration.html
+
+[tools]
+# ── Toolchain ──────────────────────────────────
+rust = "1.92"
+
+# ── Cross-compilation ─────────────────────────
+"cargo:cargo-xwin" = "latest"
