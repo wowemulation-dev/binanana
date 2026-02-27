@@ -1,0 +1,76 @@
+name: Symbol Report
+description: Report missing or incorrect symbols in binary analysis databases
+title: "[Symbol]: "
+labels: ["symbols", "needs-triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Prerequisites
+      options:
+        - label: I have searched existing issues to ensure this isn't a duplicate
+          required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      options:
+        - Missing symbol
+        - Incorrect name
+        - Wrong type/signature
+        - Incorrect address
+        - Duplicate entry
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: binary
+    attributes:
+      label: Binary
+      description: Which binary is this for?
+      placeholder: "e.g., Wow.exe 3.3.5a (12340)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the symbol issue
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-symbols
+    attributes:
+      label: Expected Symbols
+      description: What the correct symbol information should be
+      render: text
+      placeholder: |
+        Address: 0x...
+        Name: ...
+        Type: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: How did you determine the correct information?
+      placeholder: |
+        - RTTI data
+        - Debug strings
+        - Cross-references
+        - Comparison with other versions
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+    validations:
+      required: false
