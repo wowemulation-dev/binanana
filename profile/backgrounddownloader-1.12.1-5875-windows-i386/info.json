@@ -1,0 +1,12 @@
+{
+  "os": "windows",
+  "arch": "i386",
+  "module_name": "BackgroundDownloader.exe",
+  "module_base": "400000",
+  "function_count": 274,
+  "version": "1.12.1",
+  "build": 5875,
+  "product": "wow",
+  "source_path": "~/Downloads/wow/1.12.1/BackgroundDownloader.exe",
+  "notes": "WoW 1.12.1 BackgroundDownloader (WindowsClient). 32-bit PE, MSVC compiled. Patch distribution via torrent P2P with HTTP fallback."
+}
