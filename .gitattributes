@@ -1,0 +1,15 @@
+# Handle line endings automatically for files detected as text
+# and leave all files detected as binary untouched.
+* text=auto
+
+#
+# The above will handle all files NOT found below
+# These files are text and should be normalized (Convert crlf => lf)
+*.gitattributes text
+.gitignore text
+*.md text
+
+# BinaryNinja analysis exports stored in Git LFS.
+# These files can be large (100K+ lines for full client binaries)
+# and are regenerated from .bndb databases.
+profile/*/symbol/export/*.sym filter=lfs diff=lfs merge=lfs -text

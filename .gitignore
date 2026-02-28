@@ -20,6 +20,12 @@ ghidra_output/
 # Binary Ninja
 *.bndb
 
+# Gradle
+.gradle/
+extension/.gradle/
+extension/build/
+extension/dist/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -32,6 +38,9 @@ Thumbs.db
 
 # Generated files
 profile/*/symbol/main.sym
+
+# Wine prefixes (used for Ghidra headless analysis on Linux)
+**/wine-prefix/
 
 # Rust
 target/
