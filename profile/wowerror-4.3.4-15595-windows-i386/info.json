@@ -1,0 +1,12 @@
+{
+  "os": "windows",
+  "arch": "i386",
+  "module_name": "WowError.exe",
+  "module_base": "400000",
+  "function_count": 107,
+  "version": "4.3.4",
+  "build": 15595,
+  "product": "wow",
+  "source_path": "~/Downloads/wow/4.3.4/4.3.4/WowError.exe",
+  "notes": "WoW 4.3.4 WowError crash reporter. 32-bit PE, MSVC compiled. Minimal binary, no RTTI."
+}
