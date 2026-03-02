@@ -3,7 +3,7 @@
   "arch": "i386",
   "module_name": "WoW.exe",
   "module_base": "400000",
-  "function_count": 0,
+  "function_count": 3900,
   "version": "1.12.1",
   "build": 5875,
   "product": "wow",
