@@ -3,10 +3,10 @@
   "arch": "i386",
   "module_name": "Wow.exe",
   "module_base": "400000",
-  "function_count": 1175,
+  "function_count": 1356,
   "version": "2.4.3",
   "build": 8606,
   "product": "wow",
   "source_path": "~/Downloads/wow/2.4.3/Wow.exe",
-  "notes": "WoW 2.4.3 game client (Final Burning Crusade patch). 32-bit PE, MSVC compiled. ~27,706 functions, 510 RTTI entries. Phase 1: 762 Lua API functions. Phase 2: 219 networking functions (415 opcodes, mangos-tbc cross-reference)."
+  "notes": "WoW 2.4.3 game client (Final Burning Crusade patch). 32-bit PE, MSVC compiled. ~27,706 functions, 510 RTTI entries. Phase 1: 762 Lua API functions. Phase 2: 219 networking functions (415 opcodes, mangos-tbc cross-reference). Phase 3: ~100 vtable/ctor/frame-factory functions. Phase 4: 181 WowClientDB<T>::Load DBC loader instantiations."
 }
